@@ -181,7 +181,7 @@ start_services() {
     
     # Start core services first
     log_info "Starting PostgreSQL..."
-    if ! docker-compose up -d postgres; then
+    if ! docker compose up -d postgres; then
         log_error "Failed to start PostgreSQL"
         exit 1
     fi
@@ -191,14 +191,14 @@ start_services() {
     
     # Start n8n
     log_info "Starting n8n..."
-    if ! docker-compose up -d n8n; then
+    if ! docker compose up -d n8n; then
         log_error "Failed to start n8n"
         exit 1
     fi
     
     # Start Ollama
     log_info "Starting Ollama..."
-    if ! docker-compose up -d ollama; then
+    if ! docker compose up -d ollama; then
         log_error "Failed to start Ollama"
         exit 1
     fi
@@ -206,17 +206,17 @@ start_services() {
     # Check if optional services should be started
     if [[ "${ENABLE_TAILSCALE:-false}" == "true" ]]; then
         log_info "Starting Tailscale..."
-        docker-compose up -d tailscale
+        docker compose up -d tailscale
     fi
     
     if [[ "${ENABLE_REDIS:-false}" == "true" ]]; then
         log_info "Starting Redis..."
-        docker-compose up -d redis
+        docker compose up -d redis
     fi
     
     if [[ "${ENABLE_WATCHTOWER:-false}" == "true" ]]; then
         log_info "Starting Watchtower..."
-        docker-compose up -d watchtower
+        docker compose up -d watchtower
     fi
     
     log_success "Services started successfully"

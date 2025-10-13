@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Setup Script**: Docker daemon availability check now properly detects and starts Docker Desktop on macOS
 - **Setup Script**: Better handling of Docker volume creation with existing volume detection
 - **Setup Script**: More robust service startup with individual error handling for each service
+- **Setup Script**: Fixed compatibility with modern Docker installations by replacing deprecated `docker-compose` commands with `docker compose`
 
 ### Added
 
