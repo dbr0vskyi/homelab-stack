@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Docker Compose**: Removed deprecated `version: '3.8'` specification for Docker Compose v2 compatibility
+- **Setup Script**: Enhanced Docker daemon detection and automatic startup on macOS
+- **Setup Script**: Improved error handling with detailed failure messages and recovery instructions
+- **Setup Script**: Added automatic Docker Desktop startup for macOS users
+- **Setup Script**: Enhanced volume creation with better error handling and status messages
+- **Setup Script**: Improved service startup sequence with proper error checking and conditional optional services
+
+### Fixed
+
+- **Setup Script**: Docker daemon availability check now properly detects and starts Docker Desktop on macOS
+- **Setup Script**: Better handling of Docker volume creation with existing volume detection
+- **Setup Script**: More robust service startup with individual error handling for each service
+
 ### Added
 
 - Initial release of homelab automation stack

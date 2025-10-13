@@ -50,6 +50,42 @@ check_prerequisites() {
         exit 1
     fi
     
+    # Check Docker Daemon
+    log_info "Checking Docker daemon status..."
+    if ! docker info &> /dev/null; then
+        log_warning "Docker daemon is not running. Attempting to start Docker..."
+        
+        # Try to start Docker based on OS
+        if [[ "$OSTYPE" == "darwin"* ]]; then
+            log_info "Starting Docker Desktop on macOS..."
+            open -a Docker
+            log_info "Waiting for Docker to start (this may take 30-60 seconds)..."
+            
+            # Wait for Docker to start (up to 2 minutes)
+            for i in {1..24}; do
+                if docker info &> /dev/null; then
+                    log_success "Docker is now running"
+                    break
+                fi
+                echo -n "."
+                sleep 5
+            done
+            
+            # Final check
+            if ! docker info &> /dev/null; then
+                log_error "Docker failed to start. Please start Docker Desktop manually and try again."
+                echo "  1. Open Docker Desktop application"
+                echo "  2. Wait for it to fully start"
+                echo "  3. Run this script again"
+                exit 1
+            fi
+        else
+            log_error "Docker daemon is not running. Please start Docker service:"
+            echo "  sudo systemctl start docker"
+            exit 1
+        fi
+    fi
+    
     # Check architecture
     ARCH=$(uname -m)
     if [[ "$ARCH" != "arm64" && "$ARCH" != "aarch64" && "$ARCH" != "x86_64" ]]; then
@@ -107,35 +143,83 @@ setup_environment() {
 init_volumes() {
     log_info "Initializing Docker volumes..."
     
-    # Create named volumes
-    docker volume create homelab_postgres_data || true
-    docker volume create homelab_n8n_data || true
-    docker volume create homelab_ollama_data || true
+    # Verify Docker is still running
+    if ! docker info &> /dev/null; then
+        log_error "Docker daemon stopped working. Please check Docker Desktop."
+        exit 1
+    fi
+    
+    # Create named volumes with better error handling
+    log_info "Creating postgres volume..."
+    if ! docker volume create homelab_postgres_data 2>/dev/null; then
+        log_info "Postgres volume already exists or created"
+    fi
+    
+    log_info "Creating n8n volume..."
+    if ! docker volume create homelab_n8n_data 2>/dev/null; then
+        log_info "n8n volume already exists or created"
+    fi
+    
+    log_info "Creating ollama volume..."
+    if ! docker volume create homelab_ollama_data 2>/dev/null; then
+        log_info "Ollama volume already exists or created"
+    fi
     
     log_success "Docker volumes initialized"
 }
 
 # Start core services
+# Start services
 start_services() {
-    log_info "Starting core services..."
+    log_info "Starting Docker services..."
     
-    # Start database first
+    # Verify Docker is still running
+    if ! docker info &> /dev/null; then
+        log_error "Docker daemon stopped working. Please check Docker Desktop."
+        exit 1
+    fi
+    
+    # Start core services first
     log_info "Starting PostgreSQL..."
-    docker compose up -d postgres
+    if ! docker-compose up -d postgres; then
+        log_error "Failed to start PostgreSQL"
+        exit 1
+    fi
     
-    # Wait for database to be ready
-    log_info "Waiting for database to be ready..."
+    log_info "Waiting for PostgreSQL to be ready..."
     sleep 10
     
     # Start n8n
     log_info "Starting n8n..."
-    docker compose up -d n8n
+    if ! docker-compose up -d n8n; then
+        log_error "Failed to start n8n"
+        exit 1
+    fi
     
     # Start Ollama
     log_info "Starting Ollama..."
-    docker compose up -d ollama
+    if ! docker-compose up -d ollama; then
+        log_error "Failed to start Ollama"
+        exit 1
+    fi
     
-    log_success "Core services started"
+    # Check if optional services should be started
+    if [[ "${ENABLE_TAILSCALE:-false}" == "true" ]]; then
+        log_info "Starting Tailscale..."
+        docker-compose up -d tailscale
+    fi
+    
+    if [[ "${ENABLE_REDIS:-false}" == "true" ]]; then
+        log_info "Starting Redis..."
+        docker-compose up -d redis
+    fi
+    
+    if [[ "${ENABLE_WATCHTOWER:-false}" == "true" ]]; then
+        log_info "Starting Watchtower..."
+        docker-compose up -d watchtower
+    fi
+    
+    log_success "Services started successfully"
 }
 
 # Download Ollama models
