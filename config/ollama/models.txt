@@ -1,0 +1,28 @@
+# Ollama Configuration
+# Models to download automatically
+
+# Optimized for Raspberry Pi 5 16GB RAM
+llama3.1:8b
+qwen2.5:7b
+qwen2.5:14b
+mistral:7b
+codellama:13b
+llama3.2:3b
+
+# Lightweight models for testing
+llama3.2:1b
+qwen2.5:1.5b
+
+# Specialized models
+deepseek-coder:6.7b
+phi3:14b
+
+# Embedding models
+nomic-embed-text:latest
+mxbai-embed-large:latest
+
+# Configuration notes:
+# - Models are downloaded on first use or via setup script
+# - Pi 5 16GB: Can handle up to 14B parameter models
+# - Larger models (13B-14B) for better quality
+# - Multiple models can be loaded simultaneously

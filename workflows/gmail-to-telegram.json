@@ -1,0 +1,310 @@
+{
+  "meta": {
+    "instanceId": "homelab-n8n-instance"
+  },
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * *"
+            }
+          ]
+        }
+      },
+      "id": "daily-schedule",
+      "name": "Daily Gmail Check",
+      "type": "n8n-nodes-base.schedule",
+      "typeVersion": 1.2,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "getAll",
+        "returnAll": false,
+        "limit": 10,
+        "simple": false,
+        "additionalFields": {
+          "labelIds": ["INBOX"],
+          "q": "is:unread -from:me newer_than:1d"
+        }
+      },
+      "id": "get-gmail-messages",
+      "name": "Get Unread Emails",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2,
+      "position": [460, 300],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "gmail-oauth-credentials",
+          "name": "Gmail OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "condition-has-emails",
+              "leftValue": "={{ $input.all().length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-emails-exist",
+      "name": "Any Emails?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Filter and process emails for important content\nconst emails = $input.all();\nconst importantEmails = [];\n\n// Keywords that indicate important/actionable content\nconst importantKeywords = [\n  'action required', 'please review', 'urgent', 'deadline',\n  'follow up', 'response needed', 'approval', 'feedback',\n  'meeting', 'schedule', 'reminder', 'invoice', 'payment',\n  'security', 'alert', 'verification', 'confirm'\n];\n\nfor (const email of emails) {\n  const subject = email.json.payload?.headers?.find(h => \n    h.name === 'Subject'\n  )?.value || '';\n  \n  const from = email.json.payload?.headers?.find(h => \n    h.name === 'From'\n  )?.value || '';\n  \n  // Get email body (simplified)\n  const body = email.json.snippet || '';\n  \n  // Check if email contains important keywords\n  const isImportant = importantKeywords.some(keyword =>\n    subject.toLowerCase().includes(keyword) ||\n    body.toLowerCase().includes(keyword)\n  );\n  \n  // Add all emails but mark importance\n  importantEmails.push({\n    id: email.json.id,\n    subject: subject,\n    from: from,\n    body: body,\n    isImportant: isImportant,\n    receivedDate: new Date(parseInt(email.json.internalDate)).toISOString(),\n    gmailUrl: `https://mail.google.com/mail/u/0/#inbox/${email.json.id}`\n  });\n}\n\n// Sort by importance, then by date\nimportantEmails.sort((a, b) => {\n  if (a.isImportant && !b.isImportant) return -1;\n  if (!a.isImportant && b.isImportant) return 1;\n  return new Date(b.receivedDate) - new Date(a.receivedDate);\n});\n\nreturn importantEmails.map(email => ({ json: email }));"
+      },
+      "id": "process-and-filter-emails",
+      "name": "Process Emails",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://ollama:11434/api/generate",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "model",
+              "value": "qwen2.5:7b"
+            },
+            {
+              "name": "prompt",
+              "value": "Analyze this email and create a concise summary. Focus on key information, urgency, and any required actions. Keep it under 200 words.\\n\\nFrom: {{ $json.from }}\\nSubject: {{ $json.subject }}\\nContent: {{ $json.body }}\\n\\nProvide a clear, actionable summary:"
+            },
+            {
+              "name": "stream",
+              "value": false
+            }
+          ]
+        }
+      },
+      "id": "analyze-email-llm",
+      "name": "Analyze with LLM",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prepare email summary for Telegram\nconst emailData = $('Process Emails').first().json;\nconst llmResponse = $input.first().json;\n\nlet summary;\ntry {\n  summary = JSON.parse(llmResponse.response).response || llmResponse.response;\n} catch (error) {\n  summary = llmResponse.response || 'Unable to generate summary';\n}\n\n// Create formatted message\nconst priorityEmoji = emailData.isImportant ? '🔴' : '📧';\nconst fromName = emailData.from.includes('<') ? \n  emailData.from.split('<')[0].trim().replace(/\"/g, '') : \n  emailData.from;\n\nconst message = `${priorityEmoji} **Email Summary**\\n\\n` +\n  `**From:** ${fromName}\\n` +\n  `**Subject:** ${emailData.subject}\\n` +\n  `**Received:** ${new Date(emailData.receivedDate).toLocaleString()}\\n\\n` +\n  `**Summary:**\\n${summary}\\n\\n` +\n  `[Open in Gmail](${emailData.gmailUrl})`;\n\nreturn {\n  json: {\n    message: message,\n    isImportant: emailData.isImportant,\n    subject: emailData.subject,\n    from: fromName\n  }\n};"
+      },
+      "id": "format-telegram-message",
+      "name": "Format for Telegram",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1340, 300]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $env.TELEGRAM_CHAT_ID }}",
+        "text": "={{ $json.message }}",
+        "parseMode": "Markdown"
+      },
+      "id": "send-telegram-message",
+      "name": "Send to Telegram",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [1560, 300],
+      "credentials": {
+        "telegramApi": {
+          "id": "telegram-bot-credentials",
+          "name": "Telegram Bot API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Collect all processed emails for final summary\nconst processedEmails = $input.all();\nconst totalEmails = processedEmails.length;\nconst importantCount = processedEmails.filter(email => email.json.isImportant).length;\n\nif (totalEmails === 0) {\n  return {\n    json: {\n      message: '📧 Daily Gmail scan complete - no new emails found.',\n      totalEmails: 0,\n      importantEmails: 0\n    }\n  };\n}\n\nconst summaryMessage = \n  `📊 **Daily Gmail Summary**\\n\\n` +\n  `📧 Total emails processed: ${totalEmails}\\n` +\n  `🔴 Important emails: ${importantCount}\\n` +\n  `✅ All summaries sent above\\n\\n` +\n  `_Scan completed at ${new Date().toLocaleString()}_`;\n\nreturn {\n  json: {\n    message: summaryMessage,\n    totalEmails: totalEmails,\n    importantEmails: importantCount\n  }\n};"
+      },
+      "id": "create-final-summary",
+      "name": "Create Final Summary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1780, 300]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $env.TELEGRAM_CHAT_ID }}",
+        "text": "={{ $json.message }}",
+        "parseMode": "Markdown"
+      },
+      "id": "send-final-summary",
+      "name": "Send Daily Summary",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [2000, 300],
+      "credentials": {
+        "telegramApi": {
+          "id": "telegram-bot-credentials",
+          "name": "Telegram Bot API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $env.TELEGRAM_CHAT_ID }}",
+        "text": "📧 Daily Gmail scan complete - no new emails found."
+      },
+      "id": "send-no-emails-message",
+      "name": "No Emails Message",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [900, 480],
+      "credentials": {
+        "telegramApi": {
+          "id": "telegram-bot-credentials",
+          "name": "Telegram Bot API"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Daily Gmail Check": {
+      "main": [
+        [
+          {
+            "node": "Get Unread Emails",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Unread Emails": {
+      "main": [
+        [
+          {
+            "node": "Any Emails?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Any Emails?": {
+      "main": [
+        [
+          {
+            "node": "Process Emails",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Emails Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Emails": {
+      "main": [
+        [
+          {
+            "node": "Analyze with LLM",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze with LLM": {
+      "main": [
+        [
+          {
+            "node": "Format for Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format for Telegram": {
+      "main": [
+        [
+          {
+            "node": "Send to Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send to Telegram": {
+      "main": [
+        [
+          {
+            "node": "Create Final Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Final Summary": {
+      "main": [
+        [
+          {
+            "node": "Send Daily Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z",
+      "id": "gmail-automation",
+      "name": "Gmail Automation"
+    }
+  ],
+  "triggerCount": 0,
+  "updatedAt": "2024-01-01T00:00:00.000Z",
+  "versionId": "1"
+}
