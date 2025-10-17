@@ -17,13 +17,29 @@ is_n8n_running() {
 
 # Function to get n8n API credentials from environment
 get_n8n_credentials() {
-    local env_file="$(dirname "${SCRIPT_DIR}")/.env"
+    # Try multiple possible locations for .env file
+    local env_files=(
+        "$(dirname "$(dirname "${SCRIPT_DIR}")")/.env"  # Two levels up (homelab-stack/.env)
+        "$(dirname "${SCRIPT_DIR}")/.env"               # One level up
+        "${PWD}/.env"                                   # Current directory
+        "./.env"                                        # Relative current
+    )
     
-    if [[ -f "$env_file" ]]; then
+    local env_file=""
+    for file in "${env_files[@]}"; do
+        if [[ -f "$file" ]]; then
+            env_file="$file"
+            break
+        fi
+    done
+    
+    if [[ -n "$env_file" ]]; then
+        log_info "Using .env file: $env_file"
         N8N_USER=$(grep "^N8N_USER=" "$env_file" | cut -d'=' -f2- | tr -d '"' | tr -d "'" | xargs)
         N8N_PASSWORD=$(grep "^N8N_PASSWORD=" "$env_file" | cut -d'=' -f2- | tr -d '"' | tr -d "'" | xargs)
         N8N_HOST=$(grep "^N8N_HOST=" "$env_file" | cut -d'=' -f2- | tr -d '"' | tr -d "'" | xargs)
     else
+        log_error "No .env file found. Checked: ${env_files[*]}"
         N8N_USER="${N8N_USER:-admin}"
         N8N_PASSWORD="${N8N_PASSWORD}"
         N8N_HOST="${N8N_HOST:-localhost}"
@@ -256,6 +272,25 @@ export_initial_workflows() {
 # Function to test workflow sync credentials
 test_workflow_credentials() {
     log_info "Testing workflow sync credentials..."
+    
+    # Debug path information
+    log_info "Debug info:"
+    log_info "  SCRIPT_DIR: $SCRIPT_DIR"
+    log_info "  PWD: $PWD"
+    log_info "  Looking for .env in:"
+    local env_files=(
+        "$(dirname "$(dirname "${SCRIPT_DIR}")")/.env"
+        "$(dirname "${SCRIPT_DIR}")/.env"
+        "${PWD}/.env"
+        "./.env"
+    )
+    for file in "${env_files[@]}"; do
+        if [[ -f "$file" ]]; then
+            log_info "    ✓ Found: $file"
+        else
+            log_info "    ✗ Missing: $file"
+        fi
+    done
     
     if ! is_n8n_running; then
         log_error "n8n container is not running"

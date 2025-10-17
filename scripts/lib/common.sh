@@ -36,6 +36,12 @@ log_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
+log_debug() {
+    if [[ "${DEBUG:-}" == "true" ]]; then
+        echo -e "${BLUE}[DEBUG]${NC} $1"
+    fi
+}
+
 # Utility functions
 generate_password() {
     local length=${1:-25}
