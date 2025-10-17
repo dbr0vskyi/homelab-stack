@@ -16,6 +16,44 @@ is_tailscale_connected() {
     tailscale status --json &>/dev/null
 }
 
+# Check if current user can generate certificates without sudo
+can_generate_certs_without_sudo() {
+    # Test with a dummy domain to see if we get permission error
+    local test_output
+    test_output=$(tailscale cert --help 2>&1)
+    
+    # If help works, try a quick test (this will fail for domain reasons, but not permission reasons)
+    if tailscale cert --cert-file /tmp/tailscale-test-$$.pem --key-file /tmp/tailscale-test-key-$$.pem "test.invalid" 2>&1 | grep -q "Access denied"; then
+        return 1
+    else
+        # Clean up test files if they were created
+        rm -f /tmp/tailscale-test-$$.pem /tmp/tailscale-test-key-$$.pem 2>/dev/null
+        return 0
+    fi
+}
+
+# Setup Tailscale operator permissions
+setup_tailscale_operator() {
+    if can_generate_certs_without_sudo; then
+        log_success "Tailscale certificate generation already available"
+        return 0
+    fi
+    
+    log_info "Tailscale certificate generation requires operator permissions"
+    log_info "Setting up Tailscale operator for user: $(whoami)"
+    
+    # Try to set operator - this requires sudo
+    if sudo tailscale set --operator="$USER" 2>/dev/null; then
+        log_success "Successfully set Tailscale operator permissions"
+        log_info "You can now generate certificates without sudo"
+        return 0
+    else
+        log_warning "Failed to set Tailscale operator permissions"
+        log_info "Certificate generation will require sudo"
+        return 1
+    fi
+}
+
 get_tailscale_status_json() {
     if is_tailscale_connected; then
         tailscale status --json 2>/dev/null
@@ -166,14 +204,29 @@ generate_tailscale_certificate() {
     mkdir -p "$(dirname "$cert_path")"
     mkdir -p "$(dirname "$key_path")"
     
+    # Try without sudo first
     if tailscale cert --cert-file "$cert_path" --key-file "$key_path" "$hostname" 2>/dev/null; then
         log_success "Generated Tailscale certificate for $hostname"
+        return 0
+    fi
+    
+    # If that fails, try with sudo (common on Linux systems)
+    log_info "Certificate generation requires elevated privileges, trying with sudo..."
+    if sudo tailscale cert --cert-file "$cert_path" --key-file "$key_path" "$hostname" 2>/dev/null; then
+        # Fix ownership of the generated files
+        sudo chown "$(whoami):$(id -gn)" "$cert_path" "$key_path" 2>/dev/null || true
+        log_success "Generated Tailscale certificate for $hostname (with sudo)"
         return 0
     else
         log_warning "Failed to get Tailscale certificate. Possible reasons:"
         log_warning "  - Certificate permissions in Tailscale admin"
         log_warning "  - Domain not properly configured"
         log_warning "  - MagicDNS propagation delay"
+        log_warning "  - Insufficient system permissions"
+        log_info ""
+        log_info "To fix certificate permissions, try:"
+        log_info "  sudo tailscale set --operator=\$USER"
+        log_info "Or re-run setup which will attempt this automatically"
         return 1
     fi
 }

@@ -11,6 +11,7 @@ check_prerequisites() {
     check_docker_daemon
     check_architecture
     check_required_tools
+    check_tailscale_setup
     
     log_success "Prerequisites check passed"
 }
@@ -156,5 +157,31 @@ install_jq() {
             echo "  Visit: https://jqlang.github.io/jq/download/"
         fi
         return 1
+    fi
+}
+
+check_tailscale_setup() {
+    # Only check Tailscale if it's installed
+    if ! command_exists tailscale; then
+        log_info "Tailscale not installed, skipping certificate setup"
+        return 0
+    fi
+    
+    # Source Tailscale functions
+    source "$(dirname "${BASH_SOURCE[0]}")/tailscale.sh"
+    
+    # Only check if Tailscale is connected
+    if ! is_tailscale_connected; then
+        log_info "Tailscale not connected, skipping certificate setup"
+        return 0
+    fi
+    
+    log_info "Checking Tailscale certificate permissions..."
+    
+    # Try to setup operator permissions if needed
+    if setup_tailscale_operator; then
+        log_success "Tailscale certificate generation ready"
+    else
+        log_warning "Tailscale certificates will require sudo during setup"
     fi
 }

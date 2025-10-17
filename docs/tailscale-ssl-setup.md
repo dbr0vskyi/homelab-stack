@@ -17,8 +17,43 @@ Automatically get trusted HTTPS certificates through Tailscale.
 
 ## Troubleshooting
 
-**Certificate fails**: Enable MagicDNS at [admin console](https://login.tailscale.com/admin)  
-**Not logged in**: Run `tailscale up`
+### Common Issues
+
+**Certificate fails**: Enable MagicDNS at [admin console](https://login.tailscale.com/admin/dns)  
+**Not logged in**: Run `tailscale up`  
+**Permission denied**: See "Certificate Permissions" below
+
+### Certificate Permissions (Linux/Raspberry Pi)
+
+On Linux systems, certificate generation may require elevated permissions:
+
+#### Automatic Setup (Recommended)
+
+The setup script will automatically try to configure permissions:
+
+```bash
+./scripts/setup.sh  # Automatically handles permissions
+```
+
+#### Manual Setup
+
+If automatic setup fails, run manually:
+
+```bash
+# Set your user as Tailscale operator (one-time setup)
+sudo tailscale set --operator=$USER
+
+# Then regenerate certificates
+./scripts/setup.sh ssl
+```
+
+#### Troubleshooting Permissions
+
+If you see "Access denied: cert access denied":
+
+1. **Run setup script** - it will automatically attempt to fix permissions
+2. **Manual fix**: `sudo tailscale set --operator=$USER`
+3. **Use sudo**: The script will fall back to using sudo automatically
 
 ````
 
