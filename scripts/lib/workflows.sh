@@ -76,7 +76,7 @@ import_workflows() {
         jq --arg name "$workflow_name" '
             . + {
                 name: ($name),
-                active: (.active // false),
+                active: true,
                 id: (.id // null)
             } | 
             del(.createdAt, .updatedAt, .versionId)
@@ -100,14 +100,7 @@ import_workflows() {
     log_info "Importing $files_copied workflow files..."
     
     # Import all workflows using n8n CLI with --separate flag
-    # Try to import to the specific project if PROJECT_ID is set
     local import_command="import:workflow --separate --input=/tmp/workflows"
-    
-    # Check if we should import to a specific project
-    if [[ -n "${N8N_PROJECT_ID:-}" ]]; then
-        log_info "Importing to project: $N8N_PROJECT_ID"
-        import_command="$import_command --projectId=$N8N_PROJECT_ID"
-    fi
     
     local import_output
     import_output=$(run_n8n_cli $import_command 2>&1)
