@@ -83,21 +83,78 @@ check_required_tools() {
     
     # Check for jq (required for Tailscale integration)
     if ! command_exists jq; then
-        log_warning "jq is not installed. This tool is required for Tailscale integration."
-        log_info "To install jq:"
+        log_warning "jq is not installed. Installing automatically..."
+        install_jq
+    else
+        log_success "jq is already installed"
+    fi
+}
+
+install_jq() {
+    local install_cmd=""
+    local update_cmd=""
+    
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        if command_exists brew; then
+            install_cmd="brew install jq"
+        else
+            log_error "Homebrew not found. Please install jq manually:"
+            echo "  Visit: https://jqlang.github.io/jq/download/"
+            return 1
+        fi
+    elif [[ -f /etc/debian_version ]]; then
+        update_cmd="sudo apt update"
+        install_cmd="sudo apt install -y jq"
+    elif [[ -f /etc/redhat-release ]]; then
+        if command_exists dnf; then
+            install_cmd="sudo dnf install -y jq"
+        elif command_exists yum; then
+            install_cmd="sudo yum install -y jq"
+        else
+            log_error "Neither dnf nor yum found. Please install jq manually."
+            return 1
+        fi
+    elif command_exists apk; then
+        install_cmd="sudo apk add jq"
+    else
+        log_error "Unable to detect package manager. Please install jq manually:"
+        echo "  Visit: https://jqlang.github.io/jq/download/"
+        return 1
+    fi
+    
+    log_info "Installing jq..."
+    if [[ -n "$update_cmd" ]]; then
+        log_info "Updating package lists..."
+        if ! eval "$update_cmd"; then
+            log_error "Failed to update package lists"
+            return 1
+        fi
+    fi
+    
+    log_info "Running: $install_cmd"
+    if eval "$install_cmd"; then
+        log_success "jq installed successfully"
+        
+        # Verify installation
+        if command_exists jq; then
+            log_success "jq is now available and ready to use"
+        else
+            log_error "jq installation completed but command not found. You may need to restart your shell."
+            return 1
+        fi
+    else
+        log_error "Failed to install jq. Please install manually:"
         if [[ "$OSTYPE" == "darwin"* ]]; then
             echo "  brew install jq"
         elif [[ -f /etc/debian_version ]]; then
             echo "  sudo apt update && sudo apt install -y jq"
         elif [[ -f /etc/redhat-release ]]; then
-            echo "  sudo yum install -y jq   # or: sudo dnf install -y jq"
+            echo "  sudo dnf install -y jq  # or: sudo yum install -y jq"
         elif command_exists apk; then
             echo "  sudo apk add jq"
         else
-            echo "  Please install jq for your system"
             echo "  Visit: https://jqlang.github.io/jq/download/"
         fi
-        echo
-        log_info "Setup will continue but Tailscale certificate generation will be unavailable."
+        return 1
     fi
 }

@@ -47,6 +47,10 @@ get_tailscale_self_info() {
         ip_address=$(echo "$tailscale_json" | grep -o '"TailscaleIPs":\["[^"]*"' | head -1 | cut -d'"' -f4)
     fi
     
+    # Strip trailing dots from DNS names (standard DNS format includes them)
+    dns_name="${dns_name%.}"
+    tailnet_suffix="${tailnet_suffix%.}"
+    
     # Export as global variables for easy access
     TAILSCALE_HOSTNAME="$hostname"
     TAILSCALE_MACHINE_NAME="$machine_name"
