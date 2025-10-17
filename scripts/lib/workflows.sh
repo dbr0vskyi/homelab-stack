@@ -56,61 +56,63 @@ get_n8n_credentials() {
     fi
 }
 
-# Function to make authenticated API call to n8n (using existing cookie)
+# Function to make authenticated API call to n8n (using Basic Auth)
 make_n8n_api_call() {
     local method="$1"
     local endpoint="$2"
     local data="$3"
     
+    # Get credentials
+    if ! get_n8n_credentials; then
+        return 1
+    fi
+    
     if [[ -n "$data" ]]; then
-        curl -s -k -b /tmp/n8n_cookie.txt \
+        curl -s -k \
+            -u "${N8N_USER}:${N8N_PASSWORD}" \
             -H "Content-Type: application/json" \
             -X "$method" \
             -d "$data" \
             "https://${N8N_HOST}$endpoint" 2>/dev/null
     else
-        curl -s -k -b /tmp/n8n_cookie.txt \
+        curl -s -k \
+            -u "${N8N_USER}:${N8N_PASSWORD}" \
             -X "$method" \
             "https://${N8N_HOST}$endpoint" 2>/dev/null
     fi
 }
+
+# Function to test Basic Auth with n8n API
 get_n8n_auth_cookie() {
     get_n8n_credentials || return 1
     
-    # Try localhost first (for local access), then the configured host
-    local auth_successful=false
+    # Test Basic Auth by making a simple API call
+    local test_response
+    test_response=$(curl -s -k \
+        -u "${N8N_USER}:${N8N_PASSWORD}" \
+        "https://${N8N_HOST}/rest/workflows" 2>/dev/null)
     
-    # First try localhost with HTTPS (local SSL)
-    if curl -s -k -c /tmp/n8n_cookie.txt \
-        -H "Content-Type: application/json" \
-        -d "{\"email\":\"${N8N_USER}\",\"password\":\"${N8N_PASSWORD}\"}" \
-        "https://localhost/rest/login" >/dev/null 2>&1; then
-        
-        if [[ -f "/tmp/n8n_cookie.txt" ]] && [[ -s "/tmp/n8n_cookie.txt" ]]; then
-            N8N_HOST="localhost"
-            auth_successful=true
-        fi
-    fi
-    
-    # If localhost failed, try the configured host
-    if [[ "$auth_successful" == "false" ]] && [[ "$N8N_HOST" != "localhost" ]]; then
-        if curl -s -k -c /tmp/n8n_cookie.txt \
-            -H "Content-Type: application/json" \
-            -d "{\"email\":\"${N8N_USER}\",\"password\":\"${N8N_PASSWORD}\"}" \
-            "https://${N8N_HOST}/rest/login" >/dev/null 2>&1; then
-            
-            if [[ -f "/tmp/n8n_cookie.txt" ]] && [[ -s "/tmp/n8n_cookie.txt" ]]; then
-                auth_successful=true
-            fi
-        fi
-    fi
-    
-    if [[ "$auth_successful" == "true" ]]; then
+    if echo "$test_response" | jq -e '.data' >/dev/null 2>&1; then
         return 0
     else
-        log_error "Failed to authenticate with n8n API on localhost or $N8N_HOST"
+        # Try localhost if the configured host failed
+        if [[ "$N8N_HOST" != "localhost" ]]; then
+            log_info "Trying localhost as fallback..."
+            test_response=$(curl -s -k \
+                -u "${N8N_USER}:${N8N_PASSWORD}" \
+                "https://localhost/rest/workflows" 2>/dev/null)
+            
+            if echo "$test_response" | jq -e '.data' >/dev/null 2>&1; then
+                N8N_HOST="localhost"
+                return 0
+            fi
+        fi
+        
+        log_error "Failed to authenticate with n8n API using Basic Auth"
+        log_error "Response: $test_response"
         return 1
     fi
+}
 }
 
 # Function to import workflows from files to n8n
@@ -122,7 +124,8 @@ import_workflows() {
         return 1
     fi
     
-    if ! get_n8n_auth_cookie; then
+    # Test authentication first
+    if ! get_n8n_credentials; then
         return 1
     fi
     
@@ -225,7 +228,8 @@ export_workflows() {
         return 1
     fi
     
-    if ! get_n8n_auth_cookie; then
+    # Test authentication first
+    if ! get_n8n_credentials; then
         return 1
     fi
     
