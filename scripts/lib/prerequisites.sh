@@ -10,6 +10,7 @@ check_prerequisites() {
     check_docker
     check_docker_daemon
     check_architecture
+    check_required_tools
     
     log_success "Prerequisites check passed"
 }
@@ -74,5 +75,29 @@ check_architecture() {
     local arch=$(uname -m)
     if [[ "$arch" != "arm64" && "$arch" != "aarch64" && "$arch" != "x86_64" ]]; then
         log_warning "Architecture $arch may not be fully supported. Proceeding anyway..."
+    fi
+}
+
+check_required_tools() {
+    log_info "Checking required tools..."
+    
+    # Check for jq (required for Tailscale integration)
+    if ! command_exists jq; then
+        log_warning "jq is not installed. This tool is required for Tailscale integration."
+        log_info "To install jq:"
+        if [[ "$OSTYPE" == "darwin"* ]]; then
+            echo "  brew install jq"
+        elif [[ -f /etc/debian_version ]]; then
+            echo "  sudo apt update && sudo apt install -y jq"
+        elif [[ -f /etc/redhat-release ]]; then
+            echo "  sudo yum install -y jq   # or: sudo dnf install -y jq"
+        elif command_exists apk; then
+            echo "  sudo apk add jq"
+        else
+            echo "  Please install jq for your system"
+            echo "  Visit: https://jqlang.github.io/jq/download/"
+        fi
+        echo
+        log_info "Setup will continue but Tailscale certificate generation will be unavailable."
     fi
 }

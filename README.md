@@ -16,7 +16,25 @@ Self-hosted automation platform for Raspberry Pi 5/macOS. Automate workflows wit
 - **Ollama** - Local LLMs
 - **Tailscale** - Secure access (optional)
 
-## 🚀 Quick Start
+## � Prerequisites
+
+- **Docker** & **Docker Compose**
+- **jq** (for Tailscale integration - optional)
+
+### Install jq
+
+```bash
+# macOS
+brew install jq
+
+# Debian/Ubuntu/Raspberry Pi OS
+sudo apt update && sudo apt install -y jq
+
+# Red Hat/Fedora
+sudo dnf install jq
+```
+
+## �🚀 Quick Start
 
 ```bash
 # 1. Clone and setup
@@ -42,26 +60,73 @@ docker compose up -d
 - **n8n**: http://localhost:5678
 - **Ollama**: http://localhost:11434
 
+## 🛠️ Available Scripts
+
+The homelab stack includes several management scripts for easy operation:
+
+| Script                | Purpose                          | Examples                             |
+| --------------------- | -------------------------------- | ------------------------------------ |
+| `setup.sh`            | Initial setup and configuration  | `./scripts/setup.sh`                 |
+| `manage.sh`           | Daily operations and maintenance | `./scripts/manage.sh status`         |
+| `backup.sh`           | Create system backups            | `./scripts/backup.sh`                |
+| `restore.sh`          | Restore from backups             | `./scripts/restore.sh backup.tar.gz` |
+| `tailscale-helper.sh` | Tailscale configuration helper   | `./scripts/tailscale-helper.sh`      |
+
+Run any script without arguments to see available options.
+
 ## 📋 Management
 
+### Daily Operations
+
 ```bash
-# Status and logs
+# Check service status and health
 ./scripts/manage.sh status
-./scripts/manage.sh logs [service]
+./scripts/manage.sh health
+
+# View logs
+./scripts/manage.sh logs           # All services
+./scripts/manage.sh logs n8n       # Specific service
 
 # Service control
-./scripts/manage.sh start|stop|restart
+./scripts/manage.sh start          # Start services
+./scripts/manage.sh stop           # Stop services
+./scripts/manage.sh restart        # Restart services
+```
 
-# Backups
-./scripts/manage.sh backup
-./scripts/manage.sh restore <backup.tar.gz>
+### Backup & Restore
 
-# Models
+```bash
+# Create backup
+./scripts/backup.sh
+
+# Restore from backup
+./scripts/restore.sh <backup.tar.gz>
+```
+
+### AI Model Management
+
+```bash
+# List available models
 ./scripts/manage.sh models
-./scripts/manage.sh pull <model>
 
-# Updates
+# Download specific model
+./scripts/manage.sh pull llama3.1:8b
+
+# Restore models from backup
+./scripts/manage.sh restore-models models.txt
+```
+
+### Maintenance
+
+```bash
+# Update all container images
 ./scripts/manage.sh update
+
+# Clean unused Docker resources
+./scripts/manage.sh clean
+
+# Reset all data (destructive!)
+./scripts/manage.sh reset
 ```
 
 ## 🔧 Configuration
@@ -100,7 +165,7 @@ docker compose --profile watchtower up -d   # Auto-updates
 ./scripts/manage.sh restart
 
 # Ollama model issues
-docker exec homelab-ollama ollama pull llama3.1:8b
+./scripts/manage.sh pull llama3.1:8b
 ./scripts/manage.sh models
 
 # n8n workflow errors
@@ -112,7 +177,7 @@ docker exec homelab-postgres pg_isready -U n8n
 
 # SSL/HTTPS issues
 ./scripts/setup.sh ssl
-docker compose restart n8n
+./scripts/manage.sh restart
 ```
 
 ### Performance

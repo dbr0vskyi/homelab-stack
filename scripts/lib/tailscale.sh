@@ -30,11 +30,22 @@ get_tailscale_self_info() {
     
     local hostname machine_name dns_name tailnet_suffix ip_address
     
-    hostname=$(echo "$tailscale_json" | jq -r '.Self.HostName')
-    machine_name=$(echo "$tailscale_json" | jq -r '.Self.HostName')
-    dns_name=$(echo "$tailscale_json" | jq -r '.Self.DNSName')
-    tailnet_suffix=$(echo "$tailscale_json" | jq -r '.MagicDNSSuffix')
-    ip_address=$(echo "$tailscale_json" | jq -r '.Self.TailscaleIPs[0]')
+    if command_exists jq; then
+        # Use jq for proper JSON parsing
+        hostname=$(echo "$tailscale_json" | jq -r '.Self.HostName')
+        machine_name=$(echo "$tailscale_json" | jq -r '.Self.HostName')
+        dns_name=$(echo "$tailscale_json" | jq -r '.Self.DNSName')
+        tailnet_suffix=$(echo "$tailscale_json" | jq -r '.MagicDNSSuffix')
+        ip_address=$(echo "$tailscale_json" | jq -r '.Self.TailscaleIPs[0]')
+    else
+        # Fallback: basic grep-based parsing (less reliable but better than nothing)
+        log_info "Using fallback JSON parsing (install jq for better reliability)" >&2
+        hostname=$(echo "$tailscale_json" | grep -o '"HostName":"[^"]*"' | head -1 | cut -d'"' -f4)
+        machine_name="$hostname"
+        dns_name=$(echo "$tailscale_json" | grep -o '"DNSName":"[^"]*"' | head -1 | cut -d'"' -f4)
+        tailnet_suffix=$(echo "$tailscale_json" | grep -o '"MagicDNSSuffix":"[^"]*"' | head -1 | cut -d'"' -f4)
+        ip_address=$(echo "$tailscale_json" | grep -o '"TailscaleIPs":\["[^"]*"' | head -1 | cut -d'"' -f4)
+    fi
     
     # Export as global variables for easy access
     TAILSCALE_HOSTNAME="$hostname"
@@ -72,8 +83,20 @@ detect_tailscale_domain() {
     fi
     
     if ! command_exists jq; then
-        log_warning "jq not available, cannot parse Tailscale config" >&2
-        return 1
+        log_warning "jq not available, using fallback JSON parsing" >&2
+        log_info "For better reliability, install jq:" >&2
+        if [[ "$OSTYPE" == "darwin"* ]]; then
+            log_info "  brew install jq" >&2
+        elif [[ -f /etc/debian_version ]]; then
+            log_info "  sudo apt update && sudo apt install -y jq" >&2
+        elif [[ -f /etc/redhat-release ]]; then
+            log_info "  sudo yum install -y jq   # or: sudo dnf install -y jq" >&2
+        elif command_exists apk; then
+            log_info "  sudo apk add jq" >&2
+        else
+            log_info "  Visit: https://jqlang.github.io/jq/download/" >&2
+        fi
+        # Continue without jq - fallback parsing will be used
     fi
     
     if ! get_tailscale_self_info; then
