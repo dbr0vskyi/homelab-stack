@@ -19,6 +19,7 @@ source "${LIB_DIR}/ollama.sh"
 source "${LIB_DIR}/display.sh"
 
 # Main setup workflow
+# Forces container recreation to ensure clean state after configuration changes
 main() {
     echo "🏠 Homelab Stack Setup"
     echo "======================"
@@ -28,7 +29,7 @@ main() {
     setup_environment
     setup_ssl_certificates
     init_volumes
-    start_services
+    start_services true  # Force recreate containers in setup
     setup_ollama_models
     show_info
 }
@@ -52,7 +53,7 @@ case "${1:-}" in
         exit 0
         ;;
     "services")
-        start_services
+        start_services true  # Force recreate when called directly
         exit 0
         ;;
     "models")
@@ -66,12 +67,15 @@ case "${1:-}" in
     "help"|"-h"|"--help")
         echo "Usage: $0 [command]"
         echo ""
+        echo "Setup script always recreates containers for clean state."
+        echo "For regular start/stop/restart operations, use manage.sh instead."
+        echo ""
         echo "Commands:"
         echo "  prereq   - Check prerequisites only"
         echo "  env      - Setup environment configuration only"
         echo "  ssl      - Setup SSL certificates only"
         echo "  volumes  - Initialize Docker volumes only"
-        echo "  services - Start Docker services only"
+        echo "  services - Start Docker services only (recreates containers)"
         echo "  models   - Download Ollama models only"
         echo "  info     - Show setup information"
         echo "  help     - Show this help message"

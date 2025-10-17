@@ -172,14 +172,19 @@ services:
 volumes:
   postgres_data:
     name: homelab_postgres_data
+    external: true
   n8n_data:
     name: homelab_n8n_data
+    external: true
   ollama_data:
     name: homelab_ollama_data
+    external: true
   tailscale_data:
     name: homelab_tailscale_data
+    external: true
   redis_data:
     name: homelab_redis_data
+    external: true
 
 networks:
   homelab:

@@ -31,11 +31,17 @@ create_volume() {
 }
 
 start_services() {
-    log_info "Starting Docker services..."
+    local force_recreate="${1:-false}"
+    
+    if [[ "$force_recreate" == "true" ]]; then
+        log_info "Starting Docker services (recreating containers)..."
+    else
+        log_info "Starting Docker services..."
+    fi
     
     verify_docker_running
-    start_core_services
-    start_optional_services
+    start_core_services "$force_recreate"
+    start_optional_services "$force_recreate"
     
     log_success "Services started successfully"
 }
@@ -48,36 +54,51 @@ verify_docker_running() {
 }
 
 start_core_services() {
-    start_service "postgres" "PostgreSQL"
+    local force_recreate="${1:-false}"
+    
+    start_service "postgres" "PostgreSQL" "$force_recreate"
     
     log_info "Waiting for PostgreSQL to be ready..."
     sleep 10
     
-    start_service "n8n" "n8n"
-    start_service "ollama" "Ollama"
+    start_service "n8n" "n8n" "$force_recreate"
+    start_service "ollama" "Ollama" "$force_recreate"
 }
 
 start_optional_services() {
+    local force_recreate="${1:-false}"
+    
     if [[ "${ENABLE_TAILSCALE:-false}" == "true" ]]; then
-        start_service "tailscale" "Tailscale"
+        start_service "tailscale" "Tailscale" "$force_recreate"
     fi
     
     if [[ "${ENABLE_REDIS:-false}" == "true" ]]; then
-        start_service "redis" "Redis"
+        start_service "redis" "Redis" "$force_recreate"
     fi
     
     if [[ "${ENABLE_WATCHTOWER:-false}" == "true" ]]; then
-        start_service "watchtower" "Watchtower"
+        start_service "watchtower" "Watchtower" "$force_recreate"
     fi
 }
 
 start_service() {
     local service_name="$1"
     local display_name="$2"
+    local force_recreate="${3:-false}"
     
     log_info "Starting ${display_name}..."
-    if ! docker compose up -d "$service_name"; then
-        log_error "Failed to start ${display_name}"
-        exit 1
+    
+    if [[ "$force_recreate" == "true" ]]; then
+        # Force recreate containers (used by setup script)
+        if ! docker compose up -d --force-recreate "$service_name"; then
+            log_error "Failed to start ${display_name}"
+            exit 1
+        fi
+    else
+        # Normal start (used by manage script)
+        if ! docker compose up -d "$service_name"; then
+            log_error "Failed to start ${display_name}"
+            exit 1
+        fi
     fi
 }
