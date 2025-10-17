@@ -132,49 +132,78 @@ import_workflows() {
         local workflow_data
         workflow_data=$(jq -c . "$workflow_file")
         
+        # Clean the workflow data for import (remove fields that shouldn't be in import)
+        local clean_workflow_data
+        clean_workflow_data=$(echo "$workflow_data" | jq 'del(.id, .createdAt, .updatedAt, .versionId, .meta)')
+        
+        # Ensure the workflow has a name
+        local workflow_json_name
+        workflow_json_name=$(echo "$clean_workflow_data" | jq -r '.name // empty')
+        if [[ -z "$workflow_json_name" ]]; then
+            clean_workflow_data=$(echo "$clean_workflow_data" | jq --arg name "$workflow_name" '. + {name: $name}')
+        fi
+        
         # Check if workflow already exists
+        log_info "Checking for existing workflow..."
         local existing_workflows
         existing_workflows=$(curl -s -k -b /tmp/n8n_cookie.txt \
             "https://${N8N_HOST}/rest/workflows" 2>/dev/null)
         
+        if [[ -z "$existing_workflows" ]]; then
+            log_error "Failed to fetch existing workflows from n8n API"
+            ((errors++))
+            continue
+        fi
+        
         local workflow_id
-        workflow_id=$(echo "$existing_workflows" | jq -r ".data[] | select(.name == \"$workflow_name\") | .id" 2>/dev/null)
+        workflow_id=$(echo "$existing_workflows" | jq -r ".data[]? | select(.name == \"$workflow_name\") | .id" 2>/dev/null)
         
         if [[ -n "$workflow_id" && "$workflow_id" != "null" ]]; then
             # Update existing workflow
-            curl -s -k -b /tmp/n8n_cookie.txt \
+            log_info "Updating existing workflow (ID: $workflow_id)..."
+            local response
+            response=$(curl -s -k -b /tmp/n8n_cookie.txt \
                 -H "Content-Type: application/json" \
                 -X PUT \
-                -d "$workflow_data" \
-                "https://${N8N_HOST}/rest/workflows/${workflow_id}" >/dev/null 2>&1
+                -d "$clean_workflow_data" \
+                "https://${N8N_HOST}/rest/workflows/${workflow_id}" 2>/dev/null)
             
-            if [[ $? -eq 0 ]]; then
+            if echo "$response" | jq -e '.id' >/dev/null 2>&1; then
                 log_success "Updated workflow: $workflow_name"
                 ((imported++))
             else
                 log_error "Failed to update workflow: $workflow_name"
+                log_error "Response: $response"
                 ((errors++))
             fi
         else
             # Create new workflow
-            curl -s -k -b /tmp/n8n_cookie.txt \
+            log_info "Creating new workflow..."
+            local response
+            response=$(curl -s -k -b /tmp/n8n_cookie.txt \
                 -H "Content-Type: application/json" \
                 -X POST \
-                -d "$workflow_data" \
-                "https://${N8N_HOST}/rest/workflows" >/dev/null 2>&1
+                -d "$clean_workflow_data" \
+                "https://${N8N_HOST}/rest/workflows" 2>/dev/null)
             
-            if [[ $? -eq 0 ]]; then
+            if echo "$response" | jq -e '.id' >/dev/null 2>&1; then
                 log_success "Imported workflow: $workflow_name"
                 ((imported++))
             else
                 log_error "Failed to import workflow: $workflow_name"
+                log_error "Response: $response"
                 ((errors++))
             fi
         fi
     done
     
     rm -f /tmp/n8n_cookie.txt
-    log_info "Imported $imported workflows"
+    log_info "Import completed: $imported workflows imported, $errors errors"
+    
+    if [[ $imported -gt 0 ]]; then
+        log_info "Please refresh your n8n web interface to see the imported workflows"
+    fi
+    
     return $errors
 }
 
