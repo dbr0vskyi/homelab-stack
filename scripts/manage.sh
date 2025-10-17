@@ -42,6 +42,7 @@ Commands:
   Workflow Management:
   import-workflows           Import workflow files to n8n
   export-workflows          Export n8n workflows to files
+  test-workflows             Test workflow sync credentials
 
 Examples:
   $0 status                           # Show service status
@@ -51,6 +52,7 @@ Examples:
   $0 restore-models backup_models.txt # Restore models from backup
   $0 import-workflows                # Import workflow files to n8n
   $0 export-workflows                # Export n8n workflows to files
+  $0 test-workflows                  # Test workflow sync credentials
 EOF
 }
 
@@ -184,6 +186,10 @@ export_workflows_command() {
     export_workflows
 }
 
+test_workflows_command() {
+    test_workflow_credentials
+}
+
 # Main command handler
 case "${1:-}" in
     "status")
@@ -233,6 +239,9 @@ case "${1:-}" in
         ;;
     "export-workflows")
         export_workflows_command
+        ;;
+    "test-workflows")
+        test_workflows_command
         ;;
     "help"|"-h"|"--help")
         show_help

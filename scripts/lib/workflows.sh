@@ -20,17 +20,22 @@ get_n8n_credentials() {
     local env_file="$(dirname "${SCRIPT_DIR}")/.env"
     
     if [[ -f "$env_file" ]]; then
-        N8N_USER=$(grep "^N8N_USER=" "$env_file" | cut -d'=' -f2 | tr -d '"' || echo "admin")
-        N8N_PASSWORD=$(grep "^N8N_PASSWORD=" "$env_file" | cut -d'=' -f2 | tr -d '"')
-        N8N_HOST=$(grep "^N8N_HOST=" "$env_file" | cut -d'=' -f2 | tr -d '"' || echo "localhost")
+        N8N_USER=$(grep "^N8N_USER=" "$env_file" | cut -d'=' -f2- | tr -d '"' | tr -d "'" | xargs)
+        N8N_PASSWORD=$(grep "^N8N_PASSWORD=" "$env_file" | cut -d'=' -f2- | tr -d '"' | tr -d "'" | xargs)
+        N8N_HOST=$(grep "^N8N_HOST=" "$env_file" | cut -d'=' -f2- | tr -d '"' | tr -d "'" | xargs)
     else
         N8N_USER="${N8N_USER:-admin}"
         N8N_PASSWORD="${N8N_PASSWORD}"
         N8N_HOST="${N8N_HOST:-localhost}"
     fi
     
+    # Set defaults
+    N8N_USER="${N8N_USER:-admin}"
+    N8N_HOST="${N8N_HOST:-localhost}"
+    
     if [[ -z "$N8N_PASSWORD" ]]; then
         log_error "N8N_PASSWORD not found in environment or .env file"
+        log_info "Please ensure N8N_PASSWORD is set in your .env file"
         return 1
     fi
 }
@@ -39,15 +44,38 @@ get_n8n_credentials() {
 get_n8n_auth_cookie() {
     get_n8n_credentials || return 1
     
-    curl -s -k -c /tmp/n8n_cookie.txt \
+    # Try localhost first (for local access), then the configured host
+    local auth_successful=false
+    
+    # First try localhost with HTTPS (local SSL)
+    if curl -s -k -c /tmp/n8n_cookie.txt \
         -H "Content-Type: application/json" \
         -d "{\"email\":\"${N8N_USER}\",\"password\":\"${N8N_PASSWORD}\"}" \
-        "https://${N8N_HOST}/rest/login" >/dev/null 2>&1
+        "https://localhost/rest/login" >/dev/null 2>&1; then
+        
+        if [[ -f "/tmp/n8n_cookie.txt" ]] && [[ -s "/tmp/n8n_cookie.txt" ]]; then
+            N8N_HOST="localhost"
+            auth_successful=true
+        fi
+    fi
     
-    if [[ -f "/tmp/n8n_cookie.txt" ]]; then
+    # If localhost failed, try the configured host
+    if [[ "$auth_successful" == "false" ]] && [[ "$N8N_HOST" != "localhost" ]]; then
+        if curl -s -k -c /tmp/n8n_cookie.txt \
+            -H "Content-Type: application/json" \
+            -d "{\"email\":\"${N8N_USER}\",\"password\":\"${N8N_PASSWORD}\"}" \
+            "https://${N8N_HOST}/rest/login" >/dev/null 2>&1; then
+            
+            if [[ -f "/tmp/n8n_cookie.txt" ]] && [[ -s "/tmp/n8n_cookie.txt" ]]; then
+                auth_successful=true
+            fi
+        fi
+    fi
+    
+    if [[ "$auth_successful" == "true" ]]; then
         return 0
     else
-        log_error "Failed to authenticate with n8n API"
+        log_error "Failed to authenticate with n8n API on localhost or $N8N_HOST"
         return 1
     fi
 }
@@ -223,5 +251,34 @@ export_initial_workflows() {
     fi
     
     log_info "Workflow sync ready. Use: ./scripts/manage.sh import-workflows | export-workflows"
+}
+
+# Function to test workflow sync credentials
+test_workflow_credentials() {
+    log_info "Testing workflow sync credentials..."
+    
+    if ! is_n8n_running; then
+        log_error "n8n container is not running"
+        return 1
+    fi
+    
+    if get_n8n_credentials; then
+        log_success "✓ Credentials loaded successfully"
+        log_info "  User: $N8N_USER"
+        log_info "  Host: $N8N_HOST"
+        log_info "  Password: ${N8N_PASSWORD:0:3}***${N8N_PASSWORD: -3}" # Show first 3 and last 3 chars
+        
+        if get_n8n_auth_cookie; then
+            log_success "✓ Authentication successful"
+            rm -f /tmp/n8n_cookie.txt
+            return 0
+        else
+            log_error "✗ Authentication failed"
+            return 1
+        fi
+    else
+        log_error "✗ Failed to load credentials"
+        return 1
+    fi
 }
 
