@@ -56,7 +56,7 @@ get_n8n_credentials() {
     fi
 }
 
-# Function to make authenticated API call to n8n (using Basic Auth)
+# Function to make authenticated API call to n8n (using session cookies)
 make_n8n_api_call() {
     local method="$1"
     local endpoint="$2"
@@ -67,49 +67,97 @@ make_n8n_api_call() {
         return 1
     fi
     
+    # Ensure we have a valid session cookie
+    if ! test -f /tmp/n8n_session.txt || ! session_is_valid; then
+        if ! create_n8n_session; then
+            log_error "Failed to create n8n session"
+            return 1
+        fi
+    fi
+    
     if [[ -n "$data" ]]; then
         curl -s -k \
-            -u "${N8N_USER}:${N8N_PASSWORD}" \
+            -b /tmp/n8n_session.txt \
             -H "Content-Type: application/json" \
             -X "$method" \
             -d "$data" \
             "https://${N8N_HOST}$endpoint" 2>/dev/null
     else
         curl -s -k \
-            -u "${N8N_USER}:${N8N_PASSWORD}" \
+            -b /tmp/n8n_session.txt \
             -X "$method" \
             "https://${N8N_HOST}$endpoint" 2>/dev/null
     fi
+}
+
+# Function to create n8n session
+create_n8n_session() {
+    # Clear any existing session
+    rm -f /tmp/n8n_session.txt
+    
+    # First, get the login page to establish session
+    curl -s -k -c /tmp/n8n_session.txt \
+        "https://${N8N_HOST}/" >/dev/null 2>&1
+    
+    # Try Basic Auth first (for the web interface)
+    local auth_response
+    auth_response=$(curl -s -k \
+        -b /tmp/n8n_session.txt \
+        -c /tmp/n8n_session.txt \
+        -u "${N8N_USER}:${N8N_PASSWORD}" \
+        "https://${N8N_HOST}/rest/login" 2>/dev/null)
+    
+    # Check if login was successful
+    if echo "$auth_response" | jq -e '.data.id' >/dev/null 2>&1; then
+        return 0
+    fi
+    
+    # If Basic Auth failed, try form-based login
+    auth_response=$(curl -s -k \
+        -b /tmp/n8n_session.txt \
+        -c /tmp/n8n_session.txt \
+        -H "Content-Type: application/json" \
+        -X POST \
+        -d "{\"email\":\"${N8N_USER}\",\"password\":\"${N8N_PASSWORD}\"}" \
+        "https://${N8N_HOST}/rest/login" 2>/dev/null)
+    
+    if echo "$auth_response" | jq -e '.data.id' >/dev/null 2>&1; then
+        return 0
+    fi
+    
+    log_error "Failed to create n8n session"
+    log_error "Response: $auth_response"
+    return 1
+}
+
+# Function to check if session is valid
+session_is_valid() {
+    local test_response
+    test_response=$(curl -s -k \
+        -b /tmp/n8n_session.txt \
+        "https://${N8N_HOST}/rest/workflows" 2>/dev/null)
+    
+    echo "$test_response" | jq -e '.data' >/dev/null 2>&1
 }
 
 # Function to test Basic Auth with n8n API
 get_n8n_auth_cookie() {
     get_n8n_credentials || return 1
     
-    # Test Basic Auth by making a simple API call
-    local test_response
-    test_response=$(curl -s -k \
-        -u "${N8N_USER}:${N8N_PASSWORD}" \
-        "https://${N8N_HOST}/rest/workflows" 2>/dev/null)
-    
-    if echo "$test_response" | jq -e '.data' >/dev/null 2>&1; then
+    # Try to create a session
+    if create_n8n_session; then
         return 0
     else
         # Try localhost if the configured host failed
         if [[ "$N8N_HOST" != "localhost" ]]; then
             log_info "Trying localhost as fallback..."
-            test_response=$(curl -s -k \
-                -u "${N8N_USER}:${N8N_PASSWORD}" \
-                "https://localhost/rest/workflows" 2>/dev/null)
-            
-            if echo "$test_response" | jq -e '.data' >/dev/null 2>&1; then
-                N8N_HOST="localhost"
+            N8N_HOST="localhost"
+            if create_n8n_session; then
                 return 0
             fi
         fi
         
-        log_error "Failed to authenticate with n8n API using Basic Auth"
-        log_error "Response: $test_response"
+        log_error "Failed to authenticate with n8n API"
         return 1
     fi
 }
@@ -208,7 +256,7 @@ import_workflows() {
         fi
     done
     
-    rm -f /tmp/n8n_cookie.txt
+    rm -f /tmp/n8n_session.txt
     log_info "Import completed: $imported workflows imported, $errors errors"
     
     if [[ $imported -gt 0 ]]; then
@@ -272,7 +320,7 @@ export_workflows() {
         
     done < <(echo "$workflows" | jq -r '.data[].id' 2>/dev/null)
     
-    rm -f /tmp/n8n_cookie.txt
+    rm -f /tmp/n8n_session.txt
     log_info "Exported $exported workflows"
     return 0
 }
@@ -345,7 +393,7 @@ test_workflow_credentials() {
         
         if get_n8n_auth_cookie; then
             log_success "✓ Authentication successful"
-            rm -f /tmp/n8n_cookie.txt
+            rm -f /tmp/n8n_session.txt
             return 0
         else
             log_error "✗ Authentication failed"
