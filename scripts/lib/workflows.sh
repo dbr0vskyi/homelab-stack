@@ -113,7 +113,6 @@ get_n8n_auth_cookie() {
         return 1
     fi
 }
-}
 
 # Function to import workflows from files to n8n
 import_workflows() {
