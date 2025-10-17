@@ -42,6 +42,7 @@ Commands:
   Workflow Management:
   import-workflows           Import workflow files to n8n
   export-workflows          Export n8n workflows to files
+    list-projects              List n8n projects (shows IDs and names)
   test-workflows             Test workflow sync credentials
 
 Examples:
@@ -239,6 +240,9 @@ case "${1:-}" in
         ;;
     "export-workflows")
         export_workflows_command
+        ;;
+    "list-projects")
+        list_n8n_projects
         ;;
     "test-workflows")
         test_workflows_command

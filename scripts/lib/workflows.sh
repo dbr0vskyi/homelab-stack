@@ -246,6 +246,30 @@ export_initial_workflows() {
     log_info "Workflow sync ready. Use: ./scripts/manage.sh import-workflows | export-workflows"
 }
 
+# List n8n projects (returns JSON list)
+list_n8n_projects() {
+    if ! is_n8n_running; then
+        log_error "n8n container is not running"
+        return 1
+    fi
+
+    run_n8n_cli list:project --output=json 2>/dev/null || return 1
+}
+
+# Resolve project name to project ID (prints ID)
+resolve_project_id() {
+    local project_name="$1"
+    if [[ -z "$project_name" ]]; then
+        log_error "Project name required"
+        return 1
+    fi
+
+    local projects_json
+    projects_json=$(list_n8n_projects) || return 1
+
+    echo "$projects_json" | jq -r ".[] | select(.name == \"${project_name}\") | .id" 2>/dev/null
+}
+
 # Function to test workflow sync
 test_workflow_sync() {
     log_info "Testing workflow sync using n8n CLI..."
