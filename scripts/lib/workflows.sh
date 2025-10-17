@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Simple workflow import/export for n8n
+# Simple workflow import/export for n8n using CLI
 
 # Source common functions
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -15,263 +15,184 @@ is_n8n_running() {
     docker ps --format "table {{.Names}}" | grep -q "^${N8N_CONTAINER}$"
 }
 
-# Function to get n8n API credentials from environment
-get_n8n_credentials() {
-    # Try multiple possible locations for .env file
-    local env_files=(
-        "$(dirname "$(dirname "${SCRIPT_DIR}")")/.env"  # Two levels up (homelab-stack/.env)
-        "$(dirname "${SCRIPT_DIR}")/.env"               # One level up
-        "${PWD}/.env"                                   # Current directory
-        "./.env"                                        # Relative current
-    )
-    
-    local env_file=""
-    for file in "${env_files[@]}"; do
-        if [[ -f "$file" ]]; then
-            env_file="$file"
-            break
-        fi
-    done
-    
-    if [[ -n "$env_file" ]]; then
-        log_info "Using .env file: $env_file"
-        N8N_USER=$(grep "^N8N_USER=" "$env_file" | cut -d'=' -f2- | tr -d '"' | tr -d "'" | xargs)
-        N8N_PASSWORD=$(grep "^N8N_PASSWORD=" "$env_file" | cut -d'=' -f2- | tr -d '"' | tr -d "'" | xargs)
-        N8N_HOST=$(grep "^N8N_HOST=" "$env_file" | cut -d'=' -f2- | tr -d '"' | tr -d "'" | xargs)
-    else
-        log_error "No .env file found. Checked: ${env_files[*]}"
-        N8N_USER="${N8N_USER:-admin}"
-        N8N_PASSWORD="${N8N_PASSWORD}"
-        N8N_HOST="${N8N_HOST:-localhost}"
-    fi
-    
-    # Set defaults
-    N8N_USER="${N8N_USER:-admin}"
-    N8N_HOST="${N8N_HOST:-localhost}"
-    
-    if [[ -z "$N8N_PASSWORD" ]]; then
-        log_error "N8N_PASSWORD not found in environment or .env file"
-        log_info "Please ensure N8N_PASSWORD is set in your .env file"
-        return 1
-    fi
-}
-
-# Function to make authenticated API call to n8n (using HTTP Basic Auth)
-make_n8n_api_call() {
-    local method="$1"
-    local endpoint="$2"
-    local data="$3"
-    
-    # Get credentials
-    if ! get_n8n_credentials; then
-        return 1
-    fi
-    
-    if [[ -n "$data" ]]; then
-        curl -s -k \
-            -u "${N8N_USER}:${N8N_PASSWORD}" \
-            -H "Content-Type: application/json" \
-            -X "$method" \
-            -d "$data" \
-            "https://${N8N_HOST}$endpoint" 2>/dev/null
-    else
-        curl -s -k \
-            -u "${N8N_USER}:${N8N_PASSWORD}" \
-            -X "$method" \
-            "https://${N8N_HOST}$endpoint" 2>/dev/null
-    fi
-}
-
-# Function to test HTTP Basic Auth with n8n API
-get_n8n_auth_cookie() {
-    get_n8n_credentials || return 1
-    
-    # Test Basic Auth with a simple API call
-    local test_response
-    test_response=$(curl -s -k \
-        -u "${N8N_USER}:${N8N_PASSWORD}" \
-        "https://${N8N_HOST}/rest/workflows" 2>/dev/null)
-    
-    if echo "$test_response" | jq -e '.data' >/dev/null 2>&1; then
-        return 0
-    else
-        # Try localhost if the configured host failed
-        if [[ "$N8N_HOST" != "localhost" ]]; then
-            log_info "Trying localhost as fallback..."
-            test_response=$(curl -s -k \
-                -u "${N8N_USER}:${N8N_PASSWORD}" \
-                "https://localhost/rest/workflows" 2>/dev/null)
-            
-            if echo "$test_response" | jq -e '.data' >/dev/null 2>&1; then
-                N8N_HOST="localhost"
-                return 0
-            fi
-        fi
-        
-        log_error "Failed to authenticate with n8n API using Basic Auth"
-        log_error "Response: $test_response"
-        return 1
-    fi
-}
-
-# Function to import workflows from files to n8n
-import_workflows() {
-    log_info "Importing workflows to n8n..."
+# Function to run n8n CLI command in container
+run_n8n_cli() {
+    local command="$1"
+    shift
+    local args="$@"
     
     if ! is_n8n_running; then
         log_error "n8n container is not running"
         return 1
     fi
     
-    # Test authentication first
-    if ! get_n8n_credentials; then
+    log_debug "Running n8n CLI: $command $args"
+    
+    # Run n8n CLI command in the container
+    docker exec "$N8N_CONTAINER" n8n "$command" $args
+}
+
+# Function to import workflows from files to n8n
+import_workflows() {
+    log_info "Importing workflows to n8n using CLI..."
+    
+    if ! is_n8n_running; then
+        log_error "n8n container is not running"
         return 1
     fi
     
-    local imported=0
-    local errors=0
+    # Check if there are any workflow files to import
+    local workflow_files=("${WORKFLOWS_DIR}"/*.json)
+    if [[ ! -f "${workflow_files[0]}" ]]; then
+        log_info "No workflow files found in ${WORKFLOWS_DIR}"
+        return 0
+    fi
     
-    # Process each workflow file
+    # Create temporary directory in container for workflow files
+    docker exec "$N8N_CONTAINER" mkdir -p /tmp/workflows
+    
+    # Copy all workflow files to container, adding name field if missing
+    local files_copied=0
     for workflow_file in "${WORKFLOWS_DIR}"/*.json; do
         [[ ! -f "$workflow_file" ]] && continue
         
         local filename=$(basename "$workflow_file")
         local workflow_name="${filename%.json}"
         
-        log_info "Processing workflow: $workflow_name"
-        
         # Validate JSON
         if ! jq empty "$workflow_file" 2>/dev/null; then
             log_warning "Skipping invalid JSON file: $filename"
-            ((errors++))
             continue
         fi
         
-        # Read workflow data
-        local workflow_data
-        workflow_data=$(jq -c . "$workflow_file")
+        # Prepare workflow data with required fields
+        local temp_file="/tmp/${filename}"
+        jq --arg name "$workflow_name" '
+            . + {
+                name: ($name),
+                active: (.active // false),
+                id: (.id // null)
+            } | 
+            del(.createdAt, .updatedAt, .versionId)
+        ' "$workflow_file" > "$temp_file"
         
-        # Clean the workflow data for import (remove fields that shouldn't be in import)
-        local clean_workflow_data
-        clean_workflow_data=$(echo "$workflow_data" | jq 'del(.id, .createdAt, .updatedAt, .versionId, .meta)')
-        
-        # Ensure the workflow has a name
-        local workflow_json_name
-        workflow_json_name=$(echo "$clean_workflow_data" | jq -r '.name // empty')
-        if [[ -z "$workflow_json_name" ]]; then
-            clean_workflow_data=$(echo "$clean_workflow_data" | jq --arg name "$workflow_name" '. + {name: $name}')
-        fi
-        
-        # Check if workflow already exists
-        log_info "Checking for existing workflow..."
-        local existing_workflows
-        existing_workflows=$(make_n8n_api_call "GET" "/rest/workflows")
-        
-        if [[ -z "$existing_workflows" ]] || echo "$existing_workflows" | jq -e '.status == "error"' >/dev/null 2>&1; then
-            log_error "Failed to fetch existing workflows from n8n API"
-            log_error "Response: $existing_workflows"
-            ((errors++))
-            continue
-        fi
-        
-        local workflow_id
-        workflow_id=$(echo "$existing_workflows" | jq -r ".data[]? | select(.name == \"$workflow_name\") | .id" 2>/dev/null)
-        
-        if [[ -n "$workflow_id" && "$workflow_id" != "null" ]]; then
-            # Update existing workflow
-            log_info "Updating existing workflow (ID: $workflow_id)..."
-            local response
-            response=$(make_n8n_api_call "PUT" "/rest/workflows/${workflow_id}" "$clean_workflow_data")
-            
-            if echo "$response" | jq -e '.id' >/dev/null 2>&1; then
-                log_success "Updated workflow: $workflow_name"
-                ((imported++))
-            else
-                log_error "Failed to update workflow: $workflow_name"
-                log_error "Response: $response"
-                ((errors++))
-            fi
+        if docker cp "$temp_file" "$N8N_CONTAINER:/tmp/workflows/"; then
+            ((files_copied++))
+            rm -f "$temp_file"
         else
-            # Create new workflow
-            log_info "Creating new workflow..."
-            local response
-            response=$(make_n8n_api_call "POST" "/rest/workflows" "$clean_workflow_data")
-            
-            if echo "$response" | jq -e '.id' >/dev/null 2>&1; then
-                log_success "Imported workflow: $workflow_name"
-                ((imported++))
-            else
-                log_error "Failed to import workflow: $workflow_name"
-                log_error "Response: $response"
-                ((errors++))
-            fi
+            log_error "Failed to copy workflow file to container: $filename"
+            rm -f "$temp_file"
         fi
     done
     
-    log_info "Import completed: $imported workflows imported, $errors errors"
-    
-    if [[ $imported -gt 0 ]]; then
-        log_info "Please refresh your n8n web interface to see the imported workflows"
+    if [[ $files_copied -eq 0 ]]; then
+        log_error "No valid workflow files could be copied to container"
+        docker exec "$N8N_CONTAINER" rm -rf /tmp/workflows
+        return 1
     fi
     
-    return $errors
+    log_info "Importing $files_copied workflow files..."
+    
+    # Import all workflows using n8n CLI with --separate flag
+    local import_output
+    import_output=$(run_n8n_cli import:workflow --separate --input="/tmp/workflows" 2>&1)
+    local exit_code=$?
+    
+    if [[ $exit_code -eq 0 ]]; then
+        log_success "Successfully imported workflows"
+        log_info "Import output: $import_output"
+        log_info "Please refresh your n8n web interface to see the imported workflows"
+    else
+        log_error "Failed to import workflows"
+        log_error "Error output: $import_output"
+    fi
+    
+    # Clean up temporary directory
+    docker exec "$N8N_CONTAINER" rm -rf /tmp/workflows
+    
+    return $exit_code
 }
 
 # Function to export workflows from n8n to files
 export_workflows() {
-    log_info "Exporting workflows from n8n..."
+    log_info "Exporting workflows from n8n using CLI..."
     
     if ! is_n8n_running; then
         log_error "n8n container is not running"
         return 1
     fi
     
-    # Test authentication first
-    if ! get_n8n_credentials; then
-        return 1
-    fi
-    
     # Create workflows directory if it doesn't exist
     mkdir -p "$WORKFLOWS_DIR"
     
-    # Get all workflows from n8n
-    local workflows
-    workflows=$(make_n8n_api_call "GET" "/rest/workflows")
+    # Create temporary directory in container
+    docker exec "$N8N_CONTAINER" mkdir -p /tmp/exports
     
-    if [[ -z "$workflows" ]] || echo "$workflows" | jq -e '.status == "error"' >/dev/null 2>&1; then
-        log_error "Failed to fetch workflows from n8n API"
-        log_error "Response: $workflows"
-        rm -f /tmp/n8n_cookie.txt
-        return 1
+    # Export all workflows using n8n CLI
+    log_info "Exporting all workflows..."
+    local export_output
+    export_output=$(run_n8n_cli export:workflow --all --separate --output="/tmp/exports" 2>&1)
+    local exit_code=$?
+    
+    if [[ $exit_code -ne 0 ]]; then
+        log_error "Failed to export workflows"
+        log_error "Error output: $export_output"
+        docker exec "$N8N_CONTAINER" rm -rf /tmp/exports
+        return $exit_code
+    fi
+    
+    log_info "Export completed: $export_output"
+    
+    # List exported files in container
+    local exported_files
+    exported_files=$(docker exec "$N8N_CONTAINER" find /tmp/exports -name "*.json" -type f 2>/dev/null)
+    
+    if [[ -z "$exported_files" ]]; then
+        log_info "No workflow files found after export"
+        docker exec "$N8N_CONTAINER" rm -rf /tmp/exports
+        return 0
     fi
     
     local exported=0
     
-    # Process each workflow
-    while IFS= read -r workflow_id; do
-        [[ -z "$workflow_id" || "$workflow_id" == "null" ]] && continue
+    # Copy exported files from container to host
+    while IFS= read -r exported_file; do
+        [[ -z "$exported_file" ]] && continue
         
-        # Get workflow details
+        # Get filename and workflow name from exported file
+        local container_filename=$(basename "$exported_file")
+        
+        # Try to get a better filename based on workflow name
         local workflow_data
-        workflow_data=$(make_n8n_api_call "GET" "/rest/workflows/${workflow_id}")
+        workflow_data=$(docker exec "$N8N_CONTAINER" cat "$exported_file" 2>/dev/null)
         
-        if echo "$workflow_data" | jq -e '.name' >/dev/null 2>&1; then
-            # Extract workflow name and sanitize for filename
+        if [[ -n "$workflow_data" ]]; then
             local workflow_name
-            workflow_name=$(echo "$workflow_data" | jq -r '.name' | sed 's/[^a-zA-Z0-9._-]/_/g')
+            workflow_name=$(echo "$workflow_data" | jq -r '.name // empty' 2>/dev/null)
             
-            local output_file="${WORKFLOWS_DIR}/${workflow_name}.json"
+            if [[ -n "$workflow_name" && "$workflow_name" != "null" ]]; then
+                # Sanitize filename
+                workflow_name=$(echo "$workflow_name" | sed 's/[^a-zA-Z0-9._-]/_/g')
+                local output_file="${WORKFLOWS_DIR}/${workflow_name}.json"
+            else
+                local output_file="${WORKFLOWS_DIR}/${container_filename}"
+            fi
             
-            # Save workflow
-            if echo "$workflow_data" | jq '.' > "$output_file" 2>/dev/null; then
-                log_success "Exported: $workflow_name"
+            # Copy from container to host
+            if docker cp "$N8N_CONTAINER:$exported_file" "$output_file"; then
+                log_success "Exported: $(basename "$output_file")"
                 ((exported++))
+            else
+                log_error "Failed to copy exported workflow: $exported_file"
             fi
         fi
         
-    done < <(echo "$workflows" | jq -r '.data[].id' 2>/dev/null)
+    done <<< "$exported_files"
     
-    log_info "Exported $exported workflows"
+    # Clean up temporary directory
+    docker exec "$N8N_CONTAINER" rm -rf /tmp/exports
+    
+    log_info "Exported $exported workflows to ${WORKFLOWS_DIR}"
     return 0
 }
 
@@ -287,7 +208,7 @@ export_initial_workflows() {
     local max_wait=60
     local wait_time=0
     
-    while ! is_n8n_running || ! get_n8n_credentials >/dev/null 2>&1; do
+    while ! is_n8n_running; do
         if [[ $wait_time -ge $max_wait ]]; then
             log_warning "n8n not ready after ${max_wait}s, skipping workflow export"
             log_info "You can export workflows later with: ./scripts/manage.sh export-workflows"
@@ -296,6 +217,9 @@ export_initial_workflows() {
         sleep 2
         ((wait_time += 2))
     done
+    
+    # Give n8n a few more seconds to fully initialize
+    sleep 5
     
     # Export workflows if any exist
     if export_workflows >/dev/null 2>&1; then
@@ -307,50 +231,50 @@ export_initial_workflows() {
     log_info "Workflow sync ready. Use: ./scripts/manage.sh import-workflows | export-workflows"
 }
 
-# Function to test workflow sync credentials
-test_workflow_credentials() {
-    log_info "Testing workflow sync credentials..."
-    
-    # Debug path information
-    log_info "Debug info:"
-    log_info "  SCRIPT_DIR: $SCRIPT_DIR"
-    log_info "  PWD: $PWD"
-    log_info "  Looking for .env in:"
-    local env_files=(
-        "$(dirname "$(dirname "${SCRIPT_DIR}")")/.env"
-        "$(dirname "${SCRIPT_DIR}")/.env"
-        "${PWD}/.env"
-        "./.env"
-    )
-    for file in "${env_files[@]}"; do
-        if [[ -f "$file" ]]; then
-            log_info "    ✓ Found: $file"
-        else
-            log_info "    ✗ Missing: $file"
-        fi
-    done
+# Function to test workflow sync
+test_workflow_sync() {
+    log_info "Testing workflow sync using n8n CLI..."
     
     if ! is_n8n_running; then
         log_error "n8n container is not running"
         return 1
     fi
     
-    if get_n8n_credentials; then
-        log_success "✓ Credentials loaded successfully"
-        log_info "  User: $N8N_USER"
-        log_info "  Host: $N8N_HOST"
-        log_info "  Password: ${N8N_PASSWORD:0:3}***${N8N_PASSWORD: -3}" # Show first 3 and last 3 chars
-        
-        if get_n8n_auth_cookie; then
-            log_success "✓ Authentication successful"
-            return 0
-        else
-            log_error "✗ Authentication failed"
-            return 1
-        fi
+    # Test if n8n CLI is available in container
+    if docker exec "$N8N_CONTAINER" which n8n >/dev/null 2>&1; then
+        log_success "✓ n8n CLI is available in container"
     else
-        log_error "✗ Failed to load credentials"
+        log_error "✗ n8n CLI not found in container"
         return 1
     fi
+    
+    # Test listing workflows
+    log_info "Testing workflow listing..."
+    local workflow_list
+    workflow_list=$(run_n8n_cli list:workflow 2>&1)
+    local exit_code=$?
+    
+    if [[ $exit_code -eq 0 ]]; then
+        log_success "✓ Successfully connected to n8n database"
+        local workflow_count
+        workflow_count=$(echo "$workflow_list" | wc -l)
+        log_info "Found $workflow_count workflows in n8n"
+    else
+        log_error "✗ Failed to connect to n8n database"
+        log_error "Error: $workflow_list"
+        return 1
+    fi
+    
+    # Check workflows directory
+    if [[ -d "$WORKFLOWS_DIR" ]]; then
+        local file_count
+        file_count=$(find "$WORKFLOWS_DIR" -name "*.json" -type f | wc -l)
+        log_info "Found $file_count workflow files in $WORKFLOWS_DIR"
+    else
+        log_info "Workflows directory does not exist: $WORKFLOWS_DIR"
+    fi
+    
+    log_success "✓ Workflow sync test completed successfully"
+    return 0
 }
 

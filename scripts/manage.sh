@@ -187,7 +187,7 @@ export_workflows_command() {
 }
 
 test_workflows_command() {
-    test_workflow_credentials
+    test_workflow_sync
 }
 
 # Main command handler
