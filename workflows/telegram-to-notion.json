@@ -1,1 +1,318 @@
-{"createdAt":"2025-10-17T12:23:45.810Z","updatedAt":"2025-10-17T12:23:45.810Z","id":"sz6q4bQXIXzMymmb","name":"telegram-to-notion","active":false,"isArchived":false,"nodes":[{"parameters":{"updates":["message"],"additionalFields":{}},"id":"telegram-webhook","name":"Telegram Bot Webhook","type":"n8n-nodes-base.telegramTrigger","typeVersion":1,"position":[240,300],"webhookId":"telegram-bot-webhook","credentials":{"telegramApi":{"id":"telegram-bot-credentials","name":"Telegram Bot API"}}},{"parameters":{"jsCode":"// Extract message text and user info\nconst message = $input.first();\nconst text = message.json.message?.text || '';\nconst userId = message.json.message?.from?.id;\nconst userName = message.json.message?.from?.first_name || 'Unknown';\n\n// Check if message is a task/todo\nconst taskKeywords = ['todo', 'task', 'remind', 'add'];\nconst isTask = taskKeywords.some(keyword => \n  text.toLowerCase().includes(keyword)\n);\n\nreturn {\n  json: {\n    text: text,\n    userId: userId,\n    userName: userName,\n    isTask: isTask,\n    timestamp: new Date().toISOString()\n  }\n};"},"id":"process-message","name":"Process Message","type":"n8n-nodes-base.code","typeVersion":2,"position":[460,300]},{"parameters":{"conditions":{"options":{"caseSensitive":true,"leftValue":"","typeValidation":"strict"},"conditions":[{"id":"condition-is-task","leftValue":"={{ $json.isTask }}","rightValue":true,"operator":{"type":"boolean","operation":"equals"}}],"combinator":"and"},"options":{}},"id":"check-if-task","name":"Is Task?","type":"n8n-nodes-base.if","typeVersion":2,"position":[680,300]},{"parameters":{"method":"POST","url":"http://ollama:11434/api/generate","authentication":"genericCredentialType","genericAuthType":"httpHeaderAuth","sendHeaders":true,"headerParameters":{"parameters":[{"name":"Content-Type","value":"application/json"}]},"sendBody":true,"bodyParameters":{"parameters":[{"name":"model","value":"llama3.1:8b"},{"name":"prompt","value":"Extract task details from this message and format as JSON with title, description, priority (high/medium/low), and due_date (if mentioned, format as YYYY-MM-DD):\\n\\n{{ $json.text }}\\n\\nReturn only valid JSON:"},{"name":"stream","value":false},{"name":"format","value":"json"}]},"options":{}},"id":"llm-process-task","name":"LLM Process Task","type":"n8n-nodes-base.httpRequest","typeVersion":4.2,"position":[900,240]},{"parameters":{"jsCode":"// Parse LLM response and prepare for Notion\nconst response = $input.first().json;\nlet taskData;\n\ntry {\n  // Parse the LLM response\n  const llmResponse = JSON.parse(response.response);\n  taskData = llmResponse;\n} catch (error) {\n  // Fallback if LLM doesn't return valid JSON\n  taskData = {\n    title: $('Process Message').first().json.text.substring(0, 100),\n    description: $('Process Message').first().json.text,\n    priority: 'medium',\n    due_date: null\n  };\n}\n\n// Format for Notion API\nreturn {\n  json: {\n    parent: {\n      database_id: $env.NOTION_DATABASE_ID\n    },\n    properties: {\n      'Title': {\n        title: [{\n          text: {\n            content: taskData.title || 'New Task'\n          }\n        }]\n      },\n      'Description': {\n        rich_text: [{\n          text: {\n            content: taskData.description || ''\n          }\n        }]\n      },\n      'Priority': {\n        select: {\n          name: taskData.priority || 'medium'\n        }\n      },\n      'Status': {\n        select: {\n          name: 'To Do'\n        }\n      },\n      'Source': {\n        select: {\n          name: 'Telegram'\n        }\n      },\n      'Created': {\n        date: {\n          start: new Date().toISOString().split('T')[0]\n        }\n      }\n    }\n  }\n};"},"id":"format-notion-task","name":"Format for Notion","type":"n8n-nodes-base.code","typeVersion":2,"position":[1120,240]},{"parameters":{"resource":"page","operation":"create","pageId":{"__rl":true,"value":"={{ $json.parent.database_id }}","mode":"id"},"simple":false,"propertiesUi":{"propertyValues":"={{ $json.properties }}"}},"id":"create-notion-page","name":"Create Notion Task","type":"n8n-nodes-base.notion","typeVersion":2,"position":[1340,240],"credentials":{"notionApi":{"id":"notion-api-credentials","name":"Notion API"}}},{"parameters":{"chatId":"={{ $('Process Message').first().json.userId }}","text":"✅ Task created in Notion: {{ $json.properties.Title.title[0].text.content }}"},"id":"confirm-telegram","name":"Send Confirmation","type":"n8n-nodes-base.telegram","typeVersion":1.2,"position":[1560,240],"credentials":{"telegramApi":{"id":"telegram-bot-credentials","name":"Telegram Bot API"}}},{"parameters":{"chatId":"={{ $('Process Message').first().json.userId }}","text":"📝 Message received: {{ $('Process Message').first().json.text.substring(0, 100) }}..."},"id":"acknowledge-message","name":"Acknowledge Message","type":"n8n-nodes-base.telegram","typeVersion":1.2,"position":[900,360],"credentials":{"telegramApi":{"id":"telegram-bot-credentials","name":"Telegram Bot API"}}}],"connections":{"Telegram Bot Webhook":{"main":[[{"node":"Process Message","type":"main","index":0}]]},"Process Message":{"main":[[{"node":"Is Task?","type":"main","index":0}]]},"Is Task?":{"main":[[{"node":"LLM Process Task","type":"main","index":0}],[{"node":"Acknowledge Message","type":"main","index":0}]]},"LLM Process Task":{"main":[[{"node":"Format for Notion","type":"main","index":0}]]},"Format for Notion":{"main":[[{"node":"Create Notion Task","type":"main","index":0}]]},"Create Notion Task":{"main":[[{"node":"Send Confirmation","type":"main","index":0}]]}},"settings":{"executionOrder":"v1"},"staticData":null,"meta":{"instanceId":"homelab-n8n-instance"},"pinData":{},"versionId":null,"triggerCount":0,"tags":[{"createdAt":"2024-01-01T00:00:00.000Z","updatedAt":"2024-01-01T00:00:00.000Z","id":"telegram-automation","name":"Telegram Automation"}],"shared":[{"createdAt":"2025-10-17T12:23:45.810Z","updatedAt":"2025-10-17T12:23:45.810Z","role":"workflow:owner","workflowId":"sz6q4bQXIXzMymmb","projectId":"PTDcIHwvy2eBoTf7","project":{"createdAt":"2025-10-17T09:33:56.423Z","updatedAt":"2025-10-17T09:33:56.423Z","id":"PTDcIHwvy2eBoTf7","name":"Unnamed Project","type":"personal","icon":null,"description":null}}]}
+{
+  "createdAt": "2025-10-17T12:23:45.810Z",
+  "updatedAt": "2025-10-17T12:23:45.810Z",
+  "id": "sz6q4bQXIXzMymmb",
+  "name": "telegram-to-notion",
+  "active": false,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "id": "telegram-webhook",
+      "name": "Telegram Bot Webhook",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1,
+      "position": [
+        240,
+        300
+      ],
+      "webhookId": "telegram-bot-webhook",
+      "credentials": {
+        "telegramApi": {
+          "id": "telegram-bot-credentials",
+          "name": "Telegram Bot API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract message text and user info\nconst message = $input.first();\nconst text = message.json.message?.text || '';\nconst userId = message.json.message?.from?.id;\nconst userName = message.json.message?.from?.first_name || 'Unknown';\n\n// Check if message is a task/todo\nconst taskKeywords = ['todo', 'task', 'remind', 'add'];\nconst isTask = taskKeywords.some(keyword => \n  text.toLowerCase().includes(keyword)\n);\n\nreturn {\n  json: {\n    text: text,\n    userId: userId,\n    userName: userName,\n    isTask: isTask,\n    timestamp: new Date().toISOString()\n  }\n};"
+      },
+      "id": "process-message",
+      "name": "Process Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "condition-is-task",
+              "leftValue": "={{ $json.isTask }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-if-task",
+      "name": "Is Task?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        680,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://ollama:11434/api/generate",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "model",
+              "value": "llama3.1:8b"
+            },
+            {
+              "name": "prompt",
+              "value": "Extract task details from this message and format as JSON with title, description, priority (high/medium/low), and due_date (if mentioned, format as YYYY-MM-DD):\\n\\n{{ $json.text }}\\n\\nReturn only valid JSON:"
+            },
+            {
+              "name": "stream",
+              "value": false
+            },
+            {
+              "name": "format",
+              "value": "json"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "llm-process-task",
+      "name": "LLM Process Task",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        900,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse LLM response and prepare for Notion\nconst response = $input.first().json;\nlet taskData;\n\ntry {\n  // Parse the LLM response\n  const llmResponse = JSON.parse(response.response);\n  taskData = llmResponse;\n} catch (error) {\n  // Fallback if LLM doesn't return valid JSON\n  taskData = {\n    title: $('Process Message').first().json.text.substring(0, 100),\n    description: $('Process Message').first().json.text,\n    priority: 'medium',\n    due_date: null\n  };\n}\n\n// Format for Notion API\nreturn {\n  json: {\n    parent: {\n      database_id: $env.NOTION_DATABASE_ID\n    },\n    properties: {\n      'Title': {\n        title: [{\n          text: {\n            content: taskData.title || 'New Task'\n          }\n        }]\n      },\n      'Description': {\n        rich_text: [{\n          text: {\n            content: taskData.description || ''\n          }\n        }]\n      },\n      'Priority': {\n        select: {\n          name: taskData.priority || 'medium'\n        }\n      },\n      'Status': {\n        select: {\n          name: 'To Do'\n        }\n      },\n      'Source': {\n        select: {\n          name: 'Telegram'\n        }\n      },\n      'Created': {\n        date: {\n          start: new Date().toISOString().split('T')[0]\n        }\n      }\n    }\n  }\n};"
+      },
+      "id": "format-notion-task",
+      "name": "Format for Notion",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "page",
+        "operation": "create",
+        "pageId": {
+          "__rl": true,
+          "value": "={{ $json.parent.database_id }}",
+          "mode": "id"
+        },
+        "simple": false,
+        "propertiesUi": {
+          "propertyValues": "={{ $json.properties }}"
+        }
+      },
+      "id": "create-notion-page",
+      "name": "Create Notion Task",
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2,
+      "position": [
+        1340,
+        240
+      ],
+      "credentials": {
+        "notionApi": {
+          "id": "notion-api-credentials",
+          "name": "Notion API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Process Message').first().json.userId }}",
+        "text": "✅ Task created in Notion: {{ $json.properties.Title.title[0].text.content }}"
+      },
+      "id": "confirm-telegram",
+      "name": "Send Confirmation",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1560,
+        240
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "telegram-bot-credentials",
+          "name": "Telegram Bot API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Process Message').first().json.userId }}",
+        "text": "📝 Message received: {{ $('Process Message').first().json.text.substring(0, 100) }}..."
+      },
+      "id": "acknowledge-message",
+      "name": "Acknowledge Message",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        900,
+        360
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "telegram-bot-credentials",
+          "name": "Telegram Bot API"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Telegram Bot Webhook": {
+      "main": [
+        [
+          {
+            "node": "Process Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Message": {
+      "main": [
+        [
+          {
+            "node": "Is Task?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Task?": {
+      "main": [
+        [
+          {
+            "node": "LLM Process Task",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Acknowledge Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LLM Process Task": {
+      "main": [
+        [
+          {
+            "node": "Format for Notion",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format for Notion": {
+      "main": [
+        [
+          {
+            "node": "Create Notion Task",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Notion Task": {
+      "main": [
+        [
+          {
+            "node": "Send Confirmation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "meta": {
+    "instanceId": "homelab-n8n-instance"
+  },
+  "pinData": {},
+  "versionId": null,
+  "triggerCount": 0,
+  "tags": [
+    {
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z",
+      "id": "telegram-automation",
+      "name": "Telegram Automation"
+    }
+  ],
+  "shared": [
+    {
+      "createdAt": "2025-10-17T12:23:45.810Z",
+      "updatedAt": "2025-10-17T12:23:45.810Z",
+      "role": "workflow:owner",
+      "workflowId": "sz6q4bQXIXzMymmb",
+      "projectId": "PTDcIHwvy2eBoTf7",
+      "project": {
+        "createdAt": "2025-10-17T09:33:56.423Z",
+        "updatedAt": "2025-10-17T09:33:56.423Z",
+        "id": "PTDcIHwvy2eBoTf7",
+        "name": "Unnamed Project",
+        "type": "personal",
+        "icon": null,
+        "description": null
+      }
+    }
+  ]
+}
