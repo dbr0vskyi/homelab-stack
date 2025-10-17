@@ -41,17 +41,46 @@ import_workflows() {
         return 1
     fi
     
-    # Load project ID from environment if available
-    local env_file="$(dirname "$(dirname "${SCRIPT_DIR}")")/.env"
-    if [[ -f "$env_file" ]]; then
-        N8N_PROJECT_ID=$(grep "^N8N_PROJECT_ID=" "$env_file" | cut -d'=' -f2- | tr -d '"' | tr -d "'" | xargs)
-    fi
-    
     # Check if there are any workflow files to import
     local workflow_files=("${WORKFLOWS_DIR}"/*.json)
     if [[ ! -f "${workflow_files[0]}" ]]; then
         log_info "No workflow files found in ${WORKFLOWS_DIR}"
         return 0
+    fi
+    
+    # Get project ID from environment or workflow file
+    local project_id=""
+    local env_file="$(dirname "$(dirname "${SCRIPT_DIR}")")/.env"
+    
+    # Try to get from environment variable first
+    if [[ -f "$env_file" ]]; then
+        project_id=$(grep "^N8N_PROJECT_ID=" "$env_file" | cut -d'=' -f2- | tr -d '"' | tr -d "'" | xargs)
+    fi
+    
+    # If no project ID in env, try to get from workflow files
+    if [[ -z "$project_id" ]]; then
+        log_info "No N8N_PROJECT_ID in .env, checking workflow files for project ID..."
+        for workflow_file in "${WORKFLOWS_DIR}"/*.json; do
+            [[ ! -f "$workflow_file" ]] && continue
+            
+            if jq empty "$workflow_file" 2>/dev/null; then
+                project_id=$(jq -r '.shared[]?.project.id // empty' "$workflow_file" 2>/dev/null | head -1)
+                [[ -n "$project_id" ]] && break
+            fi
+        done
+    fi
+    
+    # If still no project ID, try to get the first available project from n8n
+    if [[ -z "$project_id" ]]; then
+        log_info "No project ID found, attempting to get default project from n8n..."
+        project_id=$(run_n8n_cli list:project --output=json 2>/dev/null | jq -r 'first(.[] | .id)' 2>/dev/null)
+    fi
+    
+    if [[ -z "$project_id" ]]; then
+        log_warning "Could not determine project ID for import"
+        log_info "Proceeding with import without explicit project (will use default)"
+    else
+        log_info "Using project ID: $project_id"
     fi
     
     # Create temporary directory in container for workflow files
@@ -79,7 +108,7 @@ import_workflows() {
                 active: true,
                 id: (.id // null)
             } | 
-            del(.createdAt, .updatedAt, .versionId)
+            del(.createdAt, .updatedAt, .versionId, .shared, .projectId)
         ' "$workflow_file" > "$temp_file"
         
         if docker cp "$temp_file" "$N8N_CONTAINER:/tmp/workflows/"; then
@@ -99,8 +128,13 @@ import_workflows() {
     
     log_info "Importing $files_copied workflow files..."
     
-    # Import all workflows using n8n CLI with --separate flag
+    # Import all workflows using n8n CLI
     local import_command="import:workflow --separate --input=/tmp/workflows"
+    
+    # Add project ID if available
+    if [[ -n "$project_id" ]]; then
+        import_command="$import_command --project=$project_id"
+    fi
     
     local import_output
     import_output=$(run_n8n_cli $import_command 2>&1)
@@ -121,7 +155,7 @@ import_workflows() {
     return $exit_code
 }
 
-# Function to export workflows from n8n to files
+# Export workflows from n8n to files
 export_workflows() {
     log_info "Exporting workflows from n8n using CLI..."
     
@@ -136,17 +170,32 @@ export_workflows() {
     # Create temporary directory in container
     docker exec "$N8N_CONTAINER" mkdir -p /tmp/exports
     
-    # Export all workflows using n8n CLI
-    log_info "Exporting all workflows..."
-    local export_output
-    export_output=$(run_n8n_cli export:workflow --all --separate --output="/tmp/exports" 2>&1)
-    local exit_code=$?
+    # Get all projects and export from each one
+    log_info "Fetching all n8n projects..."
+    local projects_json
+    projects_json=$(run_n8n_cli list:project --output=json 2>/dev/null)
     
-    if [[ $exit_code -ne 0 ]]; then
-        log_error "Failed to export workflows"
-        log_error "Error output: $export_output"
-        docker exec "$N8N_CONTAINER" rm -rf /tmp/exports
-        return $exit_code
+    if [[ -z "$projects_json" ]]; then
+        log_warning "Could not retrieve projects list"
+        # Fall back to exporting without project specification
+        log_info "Attempting export without project filter..."
+        local export_output
+        export_output=$(run_n8n_cli export:workflow --all --separate --output="/tmp/exports" 2>&1)
+        local exit_code=$?
+    else
+        # For each project, export workflows
+        local project_count=0
+        while IFS= read -r project_id; do
+            [[ -z "$project_id" ]] && continue
+            ((project_count++))
+            
+            log_info "Exporting workflows from project: $project_id"
+            run_n8n_cli export:workflow --all --separate --project="$project_id" --output="/tmp/exports" 2>&1
+        done < <(echo "$projects_json" | jq -r '.[] | .id' 2>/dev/null)
+        
+        if [[ $project_count -eq 0 ]]; then
+            log_warning "No projects found, attempting export without project filter..."
+        fi
     fi
     
     log_info "Export completed: $export_output"
@@ -156,7 +205,10 @@ export_workflows() {
     exported_files=$(docker exec "$N8N_CONTAINER" find /tmp/exports -name "*.json" -type f 2>/dev/null)
     
     if [[ -z "$exported_files" ]]; then
-        log_info "No workflow files found after export"
+        log_warning "No workflow files found after export. Possible reasons:"
+        log_warning "  - No workflows exist in n8n"
+        log_warning "  - Workflows are not in a project the CLI can access"
+        log_warning "  - Database might be empty or not properly initialized"
         docker exec "$N8N_CONTAINER" rm -rf /tmp/exports
         return 0
     fi
@@ -280,28 +332,56 @@ test_workflow_sync() {
         return 1
     fi
     
-    # Test listing workflows
-    log_info "Testing workflow listing..."
-    local workflow_list
-    workflow_list=$(run_n8n_cli list:workflow 2>&1)
-    local exit_code=$?
+    # Test database connection by listing projects
+    log_info "Testing database connection..."
+    local projects_list
+    projects_list=$(run_n8n_cli list:project --output=json 2>&1)
+    local projects_exit=$?
     
-    if [[ $exit_code -eq 0 ]]; then
+    if [[ $projects_exit -eq 0 ]]; then
         log_success "✓ Successfully connected to n8n database"
-        local workflow_count
-        workflow_count=$(echo "$workflow_list" | wc -l)
-        log_info "Found $workflow_count workflows in n8n"
+        local project_count
+        project_count=$(echo "$projects_list" | jq 'length' 2>/dev/null || echo "0")
+        log_info "Found $project_count projects in n8n"
+        
+        # List each project and its workflows
+        while IFS= read -r project_info; do
+            [[ -z "$project_info" ]] && continue
+            
+            local project_id=$(echo "$project_info" | jq -r '.id' 2>/dev/null)
+            local project_name=$(echo "$project_info" | jq -r '.name' 2>/dev/null)
+            
+            log_info "Project: $project_name (ID: $project_id)"
+            
+            # List workflows in this project
+            local workflow_count
+            workflow_count=$(run_n8n_cli list:workflow --project="$project_id" 2>&1 | wc -l)
+            log_info "  └─ Workflows in this project: $workflow_count"
+        done < <(echo "$projects_list" | jq -c '.[]' 2>/dev/null)
     else
         log_error "✗ Failed to connect to n8n database"
-        log_error "Error: $workflow_list"
+        log_error "Error: $projects_list"
         return 1
     fi
+    
+    # Test listing workflows without project filter
+    log_info "Testing workflow listing (without project filter)..."
+    local all_workflows
+    all_workflows=$(run_n8n_cli list:workflow 2>&1)
+    local workflows_count
+    workflows_count=$(echo "$all_workflows" | wc -l)
+    log_info "Total workflows accessible: $workflows_count"
     
     # Check workflows directory
     if [[ -d "$WORKFLOWS_DIR" ]]; then
         local file_count
         file_count=$(find "$WORKFLOWS_DIR" -name "*.json" -type f | wc -l)
         log_info "Found $file_count workflow files in $WORKFLOWS_DIR"
+        
+        if [[ $file_count -gt 0 ]]; then
+            log_info "Workflow files:"
+            find "$WORKFLOWS_DIR" -name "*.json" -type f -exec echo "  - {}" \;
+        fi
     else
         log_info "Workflows directory does not exist: $WORKFLOWS_DIR"
     fi

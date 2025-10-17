@@ -41,9 +41,9 @@ Commands:
   
   Workflow Management:
   import-workflows           Import workflow files to n8n
-  export-workflows          Export n8n workflows to files
-    list-projects              List n8n projects (shows IDs and names)
-  test-workflows             Test workflow sync credentials
+  export-workflows           Export n8n workflows to files
+  list-projects              List n8n projects (shows IDs and names)
+  test-workflows             Test workflow sync and diagnose issues
 
 Examples:
   $0 status                           # Show service status
