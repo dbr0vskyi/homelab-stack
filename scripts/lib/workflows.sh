@@ -56,7 +56,24 @@ get_n8n_credentials() {
     fi
 }
 
-# Function to get n8n auth cookie
+# Function to make authenticated API call to n8n (using existing cookie)
+make_n8n_api_call() {
+    local method="$1"
+    local endpoint="$2"
+    local data="$3"
+    
+    if [[ -n "$data" ]]; then
+        curl -s -k -b /tmp/n8n_cookie.txt \
+            -H "Content-Type: application/json" \
+            -X "$method" \
+            -d "$data" \
+            "https://${N8N_HOST}$endpoint" 2>/dev/null
+    else
+        curl -s -k -b /tmp/n8n_cookie.txt \
+            -X "$method" \
+            "https://${N8N_HOST}$endpoint" 2>/dev/null
+    fi
+}
 get_n8n_auth_cookie() {
     get_n8n_credentials || return 1
     
@@ -146,11 +163,11 @@ import_workflows() {
         # Check if workflow already exists
         log_info "Checking for existing workflow..."
         local existing_workflows
-        existing_workflows=$(curl -s -k -b /tmp/n8n_cookie.txt \
-            "https://${N8N_HOST}/rest/workflows" 2>/dev/null)
+        existing_workflows=$(make_n8n_api_call "GET" "/rest/workflows")
         
-        if [[ -z "$existing_workflows" ]]; then
+        if [[ -z "$existing_workflows" ]] || echo "$existing_workflows" | jq -e '.status == "error"' >/dev/null 2>&1; then
             log_error "Failed to fetch existing workflows from n8n API"
+            log_error "Response: $existing_workflows"
             ((errors++))
             continue
         fi
@@ -162,11 +179,7 @@ import_workflows() {
             # Update existing workflow
             log_info "Updating existing workflow (ID: $workflow_id)..."
             local response
-            response=$(curl -s -k -b /tmp/n8n_cookie.txt \
-                -H "Content-Type: application/json" \
-                -X PUT \
-                -d "$clean_workflow_data" \
-                "https://${N8N_HOST}/rest/workflows/${workflow_id}" 2>/dev/null)
+            response=$(make_n8n_api_call "PUT" "/rest/workflows/${workflow_id}" "$clean_workflow_data")
             
             if echo "$response" | jq -e '.id' >/dev/null 2>&1; then
                 log_success "Updated workflow: $workflow_name"
@@ -180,11 +193,7 @@ import_workflows() {
             # Create new workflow
             log_info "Creating new workflow..."
             local response
-            response=$(curl -s -k -b /tmp/n8n_cookie.txt \
-                -H "Content-Type: application/json" \
-                -X POST \
-                -d "$clean_workflow_data" \
-                "https://${N8N_HOST}/rest/workflows" 2>/dev/null)
+            response=$(make_n8n_api_call "POST" "/rest/workflows" "$clean_workflow_data")
             
             if echo "$response" | jq -e '.id' >/dev/null 2>&1; then
                 log_success "Imported workflow: $workflow_name"
@@ -225,11 +234,11 @@ export_workflows() {
     
     # Get all workflows from n8n
     local workflows
-    workflows=$(curl -s -k -b /tmp/n8n_cookie.txt \
-        "https://${N8N_HOST}/rest/workflows" 2>/dev/null)
+    workflows=$(make_n8n_api_call "GET" "/rest/workflows")
     
-    if [[ -z "$workflows" ]] || ! echo "$workflows" | jq -e '.data' >/dev/null 2>&1; then
+    if [[ -z "$workflows" ]] || echo "$workflows" | jq -e '.status == "error"' >/dev/null 2>&1; then
         log_error "Failed to fetch workflows from n8n API"
+        log_error "Response: $workflows"
         rm -f /tmp/n8n_cookie.txt
         return 1
     fi
@@ -242,8 +251,7 @@ export_workflows() {
         
         # Get workflow details
         local workflow_data
-        workflow_data=$(curl -s -k -b /tmp/n8n_cookie.txt \
-            "https://${N8N_HOST}/rest/workflows/${workflow_id}" 2>/dev/null)
+        workflow_data=$(make_n8n_api_call "GET" "/rest/workflows/${workflow_id}")
         
         if echo "$workflow_data" | jq -e '.name' >/dev/null 2>&1; then
             # Extract workflow name and sanitize for filename
