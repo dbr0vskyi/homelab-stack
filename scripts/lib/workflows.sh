@@ -1,0 +1,227 @@
+#!/bin/bash
+
+# Simple workflow import/export for n8n
+
+# Source common functions
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/common.sh"
+
+# Configuration
+N8N_CONTAINER="homelab-n8n"
+WORKFLOWS_DIR="$(dirname "${SCRIPT_DIR}")/../workflows"
+
+# Function to check if n8n is running
+is_n8n_running() {
+    docker ps --format "table {{.Names}}" | grep -q "^${N8N_CONTAINER}$"
+}
+
+# Function to get n8n API credentials from environment
+get_n8n_credentials() {
+    local env_file="$(dirname "${SCRIPT_DIR}")/.env"
+    
+    if [[ -f "$env_file" ]]; then
+        N8N_USER=$(grep "^N8N_USER=" "$env_file" | cut -d'=' -f2 | tr -d '"' || echo "admin")
+        N8N_PASSWORD=$(grep "^N8N_PASSWORD=" "$env_file" | cut -d'=' -f2 | tr -d '"')
+        N8N_HOST=$(grep "^N8N_HOST=" "$env_file" | cut -d'=' -f2 | tr -d '"' || echo "localhost")
+    else
+        N8N_USER="${N8N_USER:-admin}"
+        N8N_PASSWORD="${N8N_PASSWORD}"
+        N8N_HOST="${N8N_HOST:-localhost}"
+    fi
+    
+    if [[ -z "$N8N_PASSWORD" ]]; then
+        log_error "N8N_PASSWORD not found in environment or .env file"
+        return 1
+    fi
+}
+
+# Function to get n8n auth cookie
+get_n8n_auth_cookie() {
+    get_n8n_credentials || return 1
+    
+    curl -s -k -c /tmp/n8n_cookie.txt \
+        -H "Content-Type: application/json" \
+        -d "{\"email\":\"${N8N_USER}\",\"password\":\"${N8N_PASSWORD}\"}" \
+        "https://${N8N_HOST}/rest/login" >/dev/null 2>&1
+    
+    if [[ -f "/tmp/n8n_cookie.txt" ]]; then
+        return 0
+    else
+        log_error "Failed to authenticate with n8n API"
+        return 1
+    fi
+}
+
+# Function to import workflows from files to n8n
+import_workflows() {
+    log_info "Importing workflows to n8n..."
+    
+    if ! is_n8n_running; then
+        log_error "n8n container is not running"
+        return 1
+    fi
+    
+    if ! get_n8n_auth_cookie; then
+        return 1
+    fi
+    
+    local imported=0
+    local errors=0
+    
+    # Process each workflow file
+    for workflow_file in "${WORKFLOWS_DIR}"/*.json; do
+        [[ ! -f "$workflow_file" ]] && continue
+        
+        local filename=$(basename "$workflow_file")
+        local workflow_name="${filename%.json}"
+        
+        log_info "Processing workflow: $workflow_name"
+        
+        # Validate JSON
+        if ! jq empty "$workflow_file" 2>/dev/null; then
+            log_warning "Skipping invalid JSON file: $filename"
+            ((errors++))
+            continue
+        fi
+        
+        # Read workflow data
+        local workflow_data
+        workflow_data=$(jq -c . "$workflow_file")
+        
+        # Check if workflow already exists
+        local existing_workflows
+        existing_workflows=$(curl -s -k -b /tmp/n8n_cookie.txt \
+            "https://${N8N_HOST}/rest/workflows" 2>/dev/null)
+        
+        local workflow_id
+        workflow_id=$(echo "$existing_workflows" | jq -r ".data[] | select(.name == \"$workflow_name\") | .id" 2>/dev/null)
+        
+        if [[ -n "$workflow_id" && "$workflow_id" != "null" ]]; then
+            # Update existing workflow
+            curl -s -k -b /tmp/n8n_cookie.txt \
+                -H "Content-Type: application/json" \
+                -X PUT \
+                -d "$workflow_data" \
+                "https://${N8N_HOST}/rest/workflows/${workflow_id}" >/dev/null 2>&1
+            
+            if [[ $? -eq 0 ]]; then
+                log_success "Updated workflow: $workflow_name"
+                ((imported++))
+            else
+                log_error "Failed to update workflow: $workflow_name"
+                ((errors++))
+            fi
+        else
+            # Create new workflow
+            curl -s -k -b /tmp/n8n_cookie.txt \
+                -H "Content-Type: application/json" \
+                -X POST \
+                -d "$workflow_data" \
+                "https://${N8N_HOST}/rest/workflows" >/dev/null 2>&1
+            
+            if [[ $? -eq 0 ]]; then
+                log_success "Imported workflow: $workflow_name"
+                ((imported++))
+            else
+                log_error "Failed to import workflow: $workflow_name"
+                ((errors++))
+            fi
+        fi
+    done
+    
+    rm -f /tmp/n8n_cookie.txt
+    log_info "Imported $imported workflows"
+    return $errors
+}
+
+# Function to export workflows from n8n to files
+export_workflows() {
+    log_info "Exporting workflows from n8n..."
+    
+    if ! is_n8n_running; then
+        log_error "n8n container is not running"
+        return 1
+    fi
+    
+    if ! get_n8n_auth_cookie; then
+        return 1
+    fi
+    
+    # Create workflows directory if it doesn't exist
+    mkdir -p "$WORKFLOWS_DIR"
+    
+    # Get all workflows from n8n
+    local workflows
+    workflows=$(curl -s -k -b /tmp/n8n_cookie.txt \
+        "https://${N8N_HOST}/rest/workflows" 2>/dev/null)
+    
+    if [[ -z "$workflows" ]] || ! echo "$workflows" | jq -e '.data' >/dev/null 2>&1; then
+        log_error "Failed to fetch workflows from n8n API"
+        rm -f /tmp/n8n_cookie.txt
+        return 1
+    fi
+    
+    local exported=0
+    
+    # Process each workflow
+    while IFS= read -r workflow_id; do
+        [[ -z "$workflow_id" || "$workflow_id" == "null" ]] && continue
+        
+        # Get workflow details
+        local workflow_data
+        workflow_data=$(curl -s -k -b /tmp/n8n_cookie.txt \
+            "https://${N8N_HOST}/rest/workflows/${workflow_id}" 2>/dev/null)
+        
+        if echo "$workflow_data" | jq -e '.name' >/dev/null 2>&1; then
+            # Extract workflow name and sanitize for filename
+            local workflow_name
+            workflow_name=$(echo "$workflow_data" | jq -r '.name' | sed 's/[^a-zA-Z0-9._-]/_/g')
+            
+            local output_file="${WORKFLOWS_DIR}/${workflow_name}.json"
+            
+            # Save workflow
+            if echo "$workflow_data" | jq '.' > "$output_file" 2>/dev/null; then
+                log_success "Exported: $workflow_name"
+                ((exported++))
+            fi
+        fi
+        
+    done < <(echo "$workflows" | jq -r '.data[].id' 2>/dev/null)
+    
+    rm -f /tmp/n8n_cookie.txt
+    log_info "Exported $exported workflows"
+    return 0
+}
+
+# Function to export workflows during setup (waits for n8n to be ready)
+export_initial_workflows() {
+    log_info "Setting up workflow synchronization..."
+    
+    # Create workflows directory
+    mkdir -p "$WORKFLOWS_DIR"
+    
+    # Wait for n8n to be ready
+    log_info "Waiting for n8n to be ready..."
+    local max_wait=60
+    local wait_time=0
+    
+    while ! is_n8n_running || ! get_n8n_credentials >/dev/null 2>&1; do
+        if [[ $wait_time -ge $max_wait ]]; then
+            log_warning "n8n not ready after ${max_wait}s, skipping workflow export"
+            log_info "You can export workflows later with: ./scripts/manage.sh export-workflows"
+            return 0
+        fi
+        sleep 2
+        ((wait_time += 2))
+    done
+    
+    # Export workflows if any exist
+    if export_workflows >/dev/null 2>&1; then
+        log_success "Exported existing workflows to files"
+    else
+        log_info "No existing workflows to export"
+    fi
+    
+    log_info "Workflow sync ready. Use: ./scripts/manage.sh import-workflows | export-workflows"
+}
+

@@ -16,6 +16,7 @@ source "${LIB_DIR}/environment.sh"
 source "${LIB_DIR}/ssl.sh"
 source "${LIB_DIR}/services.sh"
 source "${LIB_DIR}/ollama.sh"
+source "${LIB_DIR}/workflows.sh"
 source "${LIB_DIR}/display.sh"
 
 # Main setup workflow
@@ -31,6 +32,7 @@ main() {
     init_volumes
     start_services true  # Force recreate containers in setup
     setup_ollama_models
+    export_initial_workflows
     show_info
 }
 

@@ -14,6 +14,7 @@ source "${LIB_DIR}/common.sh"
 source "${LIB_DIR}/docker.sh"
 source "${LIB_DIR}/backup.sh"
 source "${LIB_DIR}/ollama.sh"
+source "${LIB_DIR}/workflows.sh"
 
 # Show help
 show_help() {
@@ -37,6 +38,10 @@ Commands:
   pull <model>         Download specific Ollama model
   restore-models <file> Restore Ollama models from backup list
   reset                Reset all data (destructive!)
+  
+  Workflow Management:
+  import-workflows           Import workflow files to n8n
+  export-workflows          Export n8n workflows to files
 
 Examples:
   $0 status                           # Show service status
@@ -44,6 +49,8 @@ Examples:
   $0 update                          # Update all services
   $0 pull llama3.1:8b                # Download specific model
   $0 restore-models backup_models.txt # Restore models from backup
+  $0 import-workflows                # Import workflow files to n8n
+  $0 export-workflows                # Export n8n workflows to files
 EOF
 }
 
@@ -168,6 +175,15 @@ restore_backup() {
     restore_full_backup "$backup_file"
 }
 
+# Workflow management functions
+import_workflows_command() {
+    import_workflows
+}
+
+export_workflows_command() {
+    export_workflows
+}
+
 # Main command handler
 case "${1:-}" in
     "status")
@@ -211,6 +227,12 @@ case "${1:-}" in
         ;;
     "reset")
         reset_stack
+        ;;
+    "import-workflows")
+        import_workflows_command
+        ;;
+    "export-workflows")
+        export_workflows_command
         ;;
     "help"|"-h"|"--help")
         show_help

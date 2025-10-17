@@ -53,7 +53,7 @@ services:
       - "443:5678"
     volumes:
       - n8n_data:/home/node/.n8n
-      - ./workflows:/home/node/.n8n/workflows:ro
+      - ./workflows:/home/node/.n8n/workflows
       - ./config/ssl:/certs:ro
     networks:
       - homelab

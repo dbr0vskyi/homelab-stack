@@ -116,6 +116,35 @@ Run any script without arguments to see available options.
 ./scripts/manage.sh restore-models models.txt
 ```
 
+### Workflow Management
+
+```bash
+# Export n8n workflows to files (for version control)
+./scripts/manage.sh export-workflows
+
+# Import workflow files to n8n
+./scripts/manage.sh import-workflows
+```
+
+### Workflow Synchronization
+
+```bash
+# Setup workflow auto-sync
+./scripts/workflow-setup.sh
+
+# Import/export workflows
+./scripts/manage.sh sync-workflows both     # Bidirectional sync
+./scripts/manage.sh import-workflows       # Import files to n8n
+./scripts/manage.sh export-workflows      # Export n8n to files
+
+# Auto file watching
+./scripts/workflow-watcher.sh start       # Watch for file changes
+./scripts/manage.sh workflow-status       # Check sync status
+
+# Setup automatic sync service
+./scripts/manage.sh setup-auto-sync 300   # Auto-sync every 5 minutes
+```
+
 ### Maintenance
 
 ```bash
@@ -190,7 +219,7 @@ docker stats
 # Add swap space on Pi: sudo dphys-swapfile setup
 ```
 
-## � Documentation
+## 📋 Documentation
 
 - [SSL Setup Guide](docs/ssl-troubleshooting.md)
 - [Tailscale Setup](docs/tailscale-ssl-setup.md)
