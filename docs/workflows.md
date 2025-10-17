@@ -13,6 +13,7 @@ Import workflow files from the `workflows/` directory into n8n:
 ```
 
 **What it does:**
+
 - Validates all JSON workflow files
 - Cleans up metadata that could cause conflicts
 - Imports workflows using n8n CLI
@@ -21,6 +22,7 @@ Import workflow files from the `workflows/` directory into n8n:
 - Verifies successful import
 
 **Output Example:**
+
 ```
 [INFO] Importing workflows to n8n using CLI...
 [INFO] Found workflow files in workflows/:
@@ -42,6 +44,7 @@ Export workflows from n8n to the `workflows/` directory:
 ```
 
 **What it does:**
+
 - Exports all workflows from n8n database
 - Saves each workflow as a separate JSON file
 - Uses workflow name for filename (sanitized)
@@ -49,6 +52,7 @@ Export workflows from n8n to the `workflows/` directory:
 - Overwrites existing files
 
 **Use Cases:**
+
 - Backup workflows before changes
 - Version control your workflows
 - Share workflows with team members
@@ -63,6 +67,7 @@ Run comprehensive diagnostics on workflow management:
 ```
 
 **Tests performed:**
+
 1. ✓ n8n CLI availability in container
 2. ✓ Database connection and workflow listing
 3. ✓ Local workflows directory validation
@@ -81,18 +86,19 @@ If workflows don't appear in n8n UI after import:
 
 Common issues:
 
-| Issue | Cause | Solution |
-|-------|-------|----------|
-| "Invalid JSON" | Malformed workflow file | Validate JSON with `jq empty workflow.json` |
-| "Project not found" | Wrong project ID | Script auto-detects from workflow files |
-| "Duplicate workflows" | Multiple imports | Normal - n8n creates new versions |
-| "Workflows not visible" | Browser cache | Hard refresh browser |
+| Issue                   | Cause                   | Solution                                    |
+| ----------------------- | ----------------------- | ------------------------------------------- |
+| "Invalid JSON"          | Malformed workflow file | Validate JSON with `jq empty workflow.json` |
+| "Project not found"     | Wrong project ID        | Script auto-detects from workflow files     |
+| "Duplicate workflows"   | Multiple imports        | Normal - n8n creates new versions           |
+| "Workflows not visible" | Browser cache           | Hard refresh browser                        |
 
 **Verbose Logging:**
 
 For detailed debugging, check the script output. The scripts provide:
+
 - ✓ File-by-file validation status
-- ⚠️  Warnings for skipped files
+- ⚠️ Warnings for skipped files
 - ✗ Error messages with specific issues
 - 📋 Complete import/export summaries
 
@@ -103,6 +109,7 @@ For detailed debugging, check the script output. The scripts provide:
 **Flow**: Telegram → Ollama AI → Notion → Confirmation
 
 ### Setup
+
 1. Import workflow: `./scripts/manage.sh import-workflows`
 2. Open n8n web interface (https://your-domain/)
 3. Find "telegram-to-notion" workflow
@@ -114,9 +121,10 @@ For detailed debugging, check the script output. The scripts provide:
 6. Test: Send "todo: Review budget by Friday" to bot
 
 ### Usage Examples
+
 ```
 "todo: Review quarterly budget by Friday"
-"meeting: Team standup tomorrow 9am"  
+"meeting: Team standup tomorrow 9am"
 "urgent: Fix server issue ASAP"
 "note: Research new automation tools"
 ```
@@ -127,7 +135,8 @@ For detailed debugging, check the script output. The scripts provide:
 
 **Flow**: Gmail Scan → AI Analysis → Telegram Summary
 
-### Setup  
+### Setup
+
 1. Import workflow: `./scripts/manage.sh import-workflows`
 2. Open n8n web interface
 3. Find "gmail-to-telegram" workflow
@@ -140,6 +149,7 @@ For detailed debugging, check the script output. The scripts provide:
 7. Test: Run workflow manually (Execute button)
 
 ### Features
+
 - Scans last 24h of unread emails
 - Filters important/actionable emails
 - AI summarizes with priority levels
@@ -148,20 +158,24 @@ For detailed debugging, check the script output. The scripts provide:
 ## 🔧 Customization
 
 ### AI Model Selection
+
 - **Fast**: `llama3.2:1b` (basic summaries)
-- **Balanced**: `llama3.1:8b` (good quality)  
+- **Balanced**: `llama3.1:8b` (good quality)
 - **Quality**: `qwen2.5:14b` (detailed analysis)
 
 Edit the Ollama HTTP Request node in workflows to change models.
 
 ### Filtering Rules
+
 Edit workflows in n8n to customize:
+
 - Email importance detection keywords
 - Task extraction patterns
 - Summary formats and lengths
 - Notification preferences
 
 ## 📊 Monitoring
+
 - Check n8n execution history in the UI
 - Monitor logs: `./scripts/manage.sh logs n8n`
 - Test workflows manually before scheduling
@@ -173,5 +187,5 @@ Edit workflows in n8n to customize:
 
 1. Credentials are NOT included in exports (security)
 2. You must configure credentials in n8n UI after import
-3. Workflow nodes will show ⚠️  until credentials are set
+3. Workflow nodes will show ⚠️ until credentials are set
 4. See `docs/workflows-setup.md` for detailed credential setup
