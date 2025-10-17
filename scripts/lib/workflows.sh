@@ -118,7 +118,7 @@ create_n8n_session() {
         -c /tmp/n8n_session.txt \
         -H "Content-Type: application/json" \
         -X POST \
-        -d "{\"email\":\"${N8N_USER}\",\"password\":\"${N8N_PASSWORD}\"}" \
+        -d "{\"emailOrLdapLoginId\":\"${N8N_USER}\",\"password\":\"${N8N_PASSWORD}\"}" \
         "https://${N8N_HOST}/rest/login" 2>/dev/null)
     
     if echo "$auth_response" | jq -e '.data.id' >/dev/null 2>&1; then
