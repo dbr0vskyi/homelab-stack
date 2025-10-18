@@ -43,6 +43,11 @@ Commands:
   import-workflows           Import workflow files to n8n
   export-workflows           Export n8n workflows to files
   test-workflows             Test workflow sync and diagnose issues
+  
+  Diagnostic Tools:
+  diagnose-workflows         Run comprehensive workflow import diagnostics
+  test-workflow-import       Test workflow import process step by step
+  analyze-db                 Analyze n8n database state and integrity
 
 Examples:
   $0 status                           # Show service status
@@ -53,6 +58,9 @@ Examples:
   $0 import-workflows                # Import workflow files to n8n
   $0 export-workflows                # Export n8n workflows to files
   $0 test-workflows                  # Test workflow sync credentials
+  $0 diagnose-workflows              # Run comprehensive diagnostics
+  $0 test-workflow-import            # Test import process step by step
+  $0 analyze-db                      # Analyze n8n database state
 EOF
 }
 
@@ -190,6 +198,19 @@ test_workflows_command() {
     test_workflow_sync
 }
 
+# Diagnostic command functions
+diagnose_workflows_command() {
+    bash "${SCRIPT_DIR}/diagnose-workflow-import.sh"
+}
+
+test_workflow_import_command() {
+    bash "${SCRIPT_DIR}/test-workflow-import.sh"
+}
+
+analyze_db_command() {
+    bash "${SCRIPT_DIR}/analyze-n8n-db.sh"
+}
+
 # Main command handler
 case "${1:-}" in
     "status")
@@ -242,6 +263,15 @@ case "${1:-}" in
         ;;
     "test-workflows")
         test_workflows_command
+        ;;
+    "diagnose-workflows")
+        diagnose_workflows_command
+        ;;
+    "test-workflow-import")
+        test_workflow_import_command
+        ;;
+    "analyze-db")
+        analyze_db_command
         ;;
     "help"|"-h"|"--help")
         show_help
