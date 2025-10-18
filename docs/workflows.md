@@ -2,7 +2,32 @@
 
 Two automated workflows for productivity:
 
-## � Workflow Management
+## 🔄 Workflow Management
+
+### ⚠️ **IMPORTANT: First-Time Setup**
+
+**Before importing workflows, you MUST complete n8n initialization:**
+
+1. Access n8n web interface: `https://your-domain/` (or `https://localhost/` locally)
+2. Complete the setup wizard
+3. Create your admin account
+4. Wait for n8n to fully initialize
+
+**Why this is required:**
+
+- n8n CLI requires the database to be initialized
+- Database is created during first-time setup wizard
+- Without initialization, imports will fail
+
+**Check if n8n is ready:**
+
+```bash
+./scripts/manage.sh test-workflows
+```
+
+If you see "Found 0 workflow(s)" and initialization errors, complete the setup wizard first.
+
+---
 
 ### Import Workflows to n8n
 
@@ -18,6 +43,7 @@ Import workflow files from the `workflows/` directory into n8n:
 - Cleans up metadata that could cause conflicts
 - Imports workflows using n8n CLI
 - Automatically detects and uses the correct project ID
+- **Falls back to default project if project ID not found** (fresh installs)
 - Skips invalid files with detailed warnings
 - Verifies successful import
 
@@ -33,6 +59,15 @@ Import workflow files from the `workflows/` directory into n8n:
 [SUCCESS] Current workflows in n8n:
 [INFO]   apv2HH0a1EfNcMRd|gmail-to-telegram
 [INFO]   sz6q4bQXIXzMymmb|telegram-to-notion
+```
+
+**For fresh n8n installations:**
+
+```
+[WARNING] ⚠️  Project ID 'PTDcIHwvy2eBoTf7' not found in this n8n instance
+[INFO] This is normal for fresh n8n installations
+[INFO] Retrying import without project ID (will use default project)...
+[SUCCESS] ✓ Successfully imported workflows to n8n
 ```
 
 ### Export Workflows from n8n
@@ -78,20 +113,24 @@ Run comprehensive diagnostics on workflow management:
 
 If workflows don't appear in n8n UI after import:
 
-1. **Refresh the web interface** - Hard refresh (Cmd+Shift+R / Ctrl+Shift+R)
-2. **Check workflow status** - Workflows may be inactive by default
-3. **Verify project** - Ensure you're viewing the correct project in n8n
-4. **Check logs** - Run `docker logs homelab-n8n --tail 50`
-5. **Re-import** - Try exporting and re-importing
+1. **Complete n8n initialization first** - Access web UI and complete setup wizard
+2. **Refresh the web interface** - Hard refresh (Cmd+Shift+R / Ctrl+Shift+R)
+3. **Check workflow status** - Workflows may be inactive by default
+4. **Verify project** - Ensure you're viewing the correct project in n8n
+5. **Check logs** - Run `docker logs homelab-n8n --tail 50`
+6. **Re-import** - Try exporting and re-importing
 
 Common issues:
 
-| Issue                   | Cause                   | Solution                                    |
-| ----------------------- | ----------------------- | ------------------------------------------- |
-| "Invalid JSON"          | Malformed workflow file | Validate JSON with `jq empty workflow.json` |
-| "Project not found"     | Wrong project ID        | Script auto-detects from workflow files     |
-| "Duplicate workflows"   | Multiple imports        | Normal - n8n creates new versions           |
-| "Workflows not visible" | Browser cache           | Hard refresh browser                        |
+| Issue                          | Cause                    | Solution                                           |
+| ------------------------------ | ------------------------ | -------------------------------------------------- |
+| "n8n database not initialized" | First run, no setup      | Complete n8n setup wizard in web UI first          |
+| "Found 0 workflows"            | Fresh installation       | Normal - import workflows after setup              |
+| "Project not found"            | Different n8n instance   | Script auto-falls-back to default project          |
+| "Invalid JSON"                 | Malformed workflow file  | Validate JSON with `jq empty workflow.json`        |
+| "Duplicate workflows"          | Multiple imports         | Normal - n8n creates new versions                  |
+| "Workflows not visible in UI"  | Browser cache            | Hard refresh browser (Cmd+Shift+R)                 |
+| Import cuts off/hangs          | Container resource issue | Check `docker stats` and increase memory if needed |
 
 **Verbose Logging:**
 

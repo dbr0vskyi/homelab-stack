@@ -41,6 +41,22 @@ import_workflows() {
         return 1
     fi
     
+    # Check if n8n is initialized (has database tables)
+    log_debug "Checking if n8n is initialized..."
+    local workflow_check
+    workflow_check=$(docker exec "$N8N_CONTAINER" n8n list:workflow 2>&1)
+    if [[ $? -ne 0 ]]; then
+        log_error "n8n database is not properly initialized"
+        log_error "Error: $workflow_check"
+        log_info ""
+        log_info "This may be the first time n8n is running. Please:"
+        log_info "1. Access n8n web interface (https://your-domain/)"
+        log_info "2. Complete the initial setup wizard"
+        log_info "3. Create your admin account"
+        log_info "4. Then re-run this import command"
+        return 1
+    fi
+    
     # Check if there are any workflow files to import
     local workflow_files=("${WORKFLOWS_DIR}"/*.json)
     if [[ ! -f "${workflow_files[0]}" ]]; then
@@ -166,21 +182,29 @@ import_workflows() {
     # Import all workflows using n8n CLI
     log_info "Executing import command..."
     
-    # Build the import command
+    # First, try importing with project ID if available
     local import_cmd="n8n import:workflow --separate --input=/tmp/workflows"
-    
-    # Add project ID if available
-    if [[ -n "$project_id" && "$project_id" != "null" ]]; then
-        import_cmd="$import_cmd --projectId=$project_id"
-        log_debug "Using project ID: $project_id"
-    fi
-    
-    log_debug "Command: $import_cmd"
-    
-    # Execute import directly in container
     local import_output
-    import_output=$(docker exec "$N8N_CONTAINER" $import_cmd 2>&1)
-    local exit_code=$?
+    local exit_code
+    
+    if [[ -n "$project_id" && "$project_id" != "null" ]]; then
+        log_info "Attempting import with project ID: $project_id"
+        import_output=$(docker exec "$N8N_CONTAINER" $import_cmd --projectId="$project_id" 2>&1)
+        exit_code=$?
+        
+        # If import failed due to project not found, retry without project ID
+        if [[ $exit_code -ne 0 ]] && echo "$import_output" | grep -q "Could not find any entity of type \"Project\""; then
+            log_warning "⚠️  Project ID '$project_id' not found in this n8n instance"
+            log_info "This is normal for fresh n8n installations"
+            log_info "Retrying import without project ID (will use default project)..."
+            import_output=$(docker exec "$N8N_CONTAINER" $import_cmd 2>&1)
+            exit_code=$?
+        fi
+    else
+        log_info "No project ID specified, using default project"
+        import_output=$(docker exec "$N8N_CONTAINER" $import_cmd 2>&1)
+        exit_code=$?
+    fi
     
     if [[ $exit_code -eq 0 ]]; then
         log_success "✓ Successfully imported workflows to n8n"
