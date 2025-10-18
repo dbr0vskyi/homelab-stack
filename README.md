@@ -16,25 +16,7 @@ Self-hosted automation platform for Raspberry Pi 5/macOS. Automate workflows wit
 - **Ollama** - Local LLMs
 - **Tailscale** - Secure access (optional)
 
-## � Prerequisites
-
-- **Docker** & **Docker Compose**
-- **jq** (for Tailscale integration - optional)
-
-### Install jq
-
-```bash
-# macOS
-brew install jq
-
-# Debian/Ubuntu/Raspberry Pi OS
-sudo apt update && sudo apt install -y jq
-
-# Red Hat/Fedora
-sudo dnf install jq
-```
-
-## �🚀 Quick Start
+## 🚀 Quick Start
 
 ```bash
 # 1. Clone and setup
