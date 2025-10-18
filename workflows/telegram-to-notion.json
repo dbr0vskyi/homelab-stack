@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-10-17T12:23:45.810Z",
-  "updatedAt": "2025-10-17T12:23:45.810Z",
-  "id": "sz6q4bQXIXzMymmb",
+  "createdAt": "2025-10-18T17:55:53.174Z",
+  "updatedAt": "2025-10-18T17:55:53.174Z",
+  "id": "RMyoNuapFh5mzfuy",
   "name": "telegram-to-notion",
   "active": false,
   "isArchived": false,
@@ -283,9 +283,7 @@
     "executionOrder": "v1"
   },
   "staticData": null,
-  "meta": {
-    "instanceId": "homelab-n8n-instance"
-  },
+  "meta": null,
   "pinData": {},
   "versionId": null,
   "triggerCount": 0,
@@ -299,16 +297,16 @@
   ],
   "shared": [
     {
-      "createdAt": "2025-10-17T12:23:45.810Z",
-      "updatedAt": "2025-10-17T12:23:45.810Z",
+      "createdAt": "2025-10-18T17:55:53.174Z",
+      "updatedAt": "2025-10-18T17:55:53.174Z",
       "role": "workflow:owner",
-      "workflowId": "sz6q4bQXIXzMymmb",
-      "projectId": "PTDcIHwvy2eBoTf7",
+      "workflowId": "RMyoNuapFh5mzfuy",
+      "projectId": "noih0PuhmH3JKvcS",
       "project": {
-        "createdAt": "2025-10-17T09:33:56.423Z",
-        "updatedAt": "2025-10-17T09:33:56.423Z",
-        "id": "PTDcIHwvy2eBoTf7",
-        "name": "Unnamed Project",
+        "createdAt": "2025-10-18T16:45:08.660Z",
+        "updatedAt": "2025-10-18T16:47:09.961Z",
+        "id": "noih0PuhmH3JKvcS",
+        "name": "Yevhenii Dubrovskyi <yevhenii.dubrovskyi@gmail.com>",
         "type": "personal",
         "icon": null,
         "description": null
