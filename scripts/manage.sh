@@ -45,9 +45,8 @@ Commands:
   test-workflows             Test workflow sync and diagnose issues
   
   Diagnostic Tools:
-  diagnose-workflows         Run comprehensive workflow import diagnostics
-  test-workflow-import       Test workflow import process step by step
-  analyze-db                 Analyze n8n database state and integrity
+  diagnose                   Universal environment diagnostic tool
+  diagnose [mode]            Specific diagnostic mode (system/database/n8n/etc)
 
 Examples:
   $0 status                           # Show service status
@@ -58,9 +57,9 @@ Examples:
   $0 import-workflows                # Import workflow files to n8n
   $0 export-workflows                # Export n8n workflows to files
   $0 test-workflows                  # Test workflow sync credentials
-  $0 diagnose-workflows              # Run comprehensive diagnostics
-  $0 test-workflow-import            # Test import process step by step
-  $0 analyze-db                      # Analyze n8n database state
+  $0 diagnose                        # Full system diagnostic
+  $0 diagnose database               # Database analysis only
+  $0 diagnose summary                # Quick system summary
 EOF
 }
 
@@ -198,17 +197,12 @@ test_workflows_command() {
     test_workflow_sync
 }
 
-# Diagnostic command functions
-diagnose_workflows_command() {
-    bash "${SCRIPT_DIR}/diagnose-workflow-import.sh"
-}
-
-test_workflow_import_command() {
-    bash "${SCRIPT_DIR}/test-workflow-import.sh"
-}
-
-analyze_db_command() {
-    bash "${SCRIPT_DIR}/analyze-n8n-db.sh"
+# Universal diagnostic command function
+diagnose_command() {
+    local mode="${1:-full}"
+    # Use parent directory of LIB_DIR to get to scripts directory
+    local scripts_dir="$(dirname "$LIB_DIR")"
+    bash "$scripts_dir/diagnose-universal.sh" "$mode"
 }
 
 # Main command handler
@@ -264,14 +258,8 @@ case "${1:-}" in
     "test-workflows")
         test_workflows_command
         ;;
-    "diagnose-workflows")
-        diagnose_workflows_command
-        ;;
-    "test-workflow-import")
-        test_workflow_import_command
-        ;;
-    "analyze-db")
-        analyze_db_command
+    "diagnose")
+        diagnose_command "$2"
         ;;
     "help"|"-h"|"--help")
         show_help
