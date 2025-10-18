@@ -119,30 +119,27 @@ Run any script without arguments to see available options.
 ### Workflow Management
 
 ```bash
+# Import workflow files to n8n (cross-environment compatible)
+./scripts/manage.sh import-workflows
+
 # Export n8n workflows to files (for version control)
 ./scripts/manage.sh export-workflows
-
-# Import workflow files to n8n
-./scripts/manage.sh import-workflows
 ```
 
-### Workflow Synchronization
+### Diagnostics
 
 ```bash
-# Setup workflow auto-sync
-./scripts/workflow-setup.sh
+# Full system diagnostic
+./scripts/manage.sh diagnose
 
-# Import/export workflows
-./scripts/manage.sh sync-workflows both     # Bidirectional sync
-./scripts/manage.sh import-workflows       # Import files to n8n
-./scripts/manage.sh export-workflows      # Export n8n to files
+# Specific diagnostics
+./scripts/manage.sh diagnose system      # System info
+./scripts/manage.sh diagnose database   # Database analysis
+./scripts/manage.sh diagnose n8n        # n8n functionality
+./scripts/manage.sh diagnose summary    # Quick overview
 
-# Auto file watching
-./scripts/workflow-watcher.sh start       # Watch for file changes
-./scripts/manage.sh workflow-status       # Check sync status
-
-# Setup automatic sync service
-./scripts/manage.sh setup-auto-sync 300   # Auto-sync every 5 minutes
+# Direct diagnostic access
+./scripts/diagnose-universal.sh help    # All diagnostic modes
 ```
 
 ### Maintenance
@@ -189,24 +186,22 @@ docker compose --profile watchtower up -d   # Auto-updates
 ### Common Issues
 
 ```bash
+# Quick system check
+./scripts/manage.sh diagnose summary
+
 # Services won't start
-./scripts/manage.sh logs
+./scripts/manage.sh diagnose system
 ./scripts/manage.sh restart
 
-# Ollama model issues
-./scripts/manage.sh pull llama3.1:8b
-./scripts/manage.sh models
+# n8n workflow import/export issues
+./scripts/manage.sh diagnose n8n
+./scripts/manage.sh import-workflows
 
-# n8n workflow errors
-./scripts/manage.sh logs n8n
-# Check API tokens in .env
+# Database connectivity
+./scripts/manage.sh diagnose database
 
-# Database issues
-docker exec homelab-postgres pg_isready -U n8n
-
-# SSL/HTTPS issues
-./scripts/setup.sh ssl
-./scripts/manage.sh restart
+# Full diagnostic report
+./scripts/manage.sh diagnose > diagnostic.log
 ```
 
 ### Performance
