@@ -6,39 +6,38 @@ This document tracks planned improvements, fixes, and enhancements for the homel
 
 ### 🔥 High Priority
 
-#### 1. Comprehensive System Monitoring & Logging
+#### 1. Lightweight Monitoring & Logging
 
 **Status:** Planning  
 **Priority:** High  
 **Estimated Effort:** 2-3 days
 
 **Description:**  
-Implement extensive logging system to monitor Raspberry Pi health metrics and centralize all logs with web access.
+Implement a lightweight monitoring and logging stack optimized for Raspberry Pi 5 with LLM workloads.
 
 **Requirements:**
 
-- [ ] Monitor system metrics (temperature, CPU throttling, CPU usage, RAM, disk space)
-- [ ] Centralize Docker container/service logs
-- [ ] Merge logs with timestamps for unified view
-- [ ] Provide web-based log access interface
-- [ ] Set up alerts for critical thresholds
+- [ ] Monitor system metrics (temperature, CPU throttling, RAM, disk space)
+- [ ] Collect Docker container/service metrics
+- [ ] Centralize logs with minimal disk I/O
+- [ ] Provide dashboards and alerts for critical thresholds
+- [ ] Ensure resource usage stays within 1.5 GB RAM
 
 **Technical Approach:**
 
-- **Metrics Collection:** Prometheus + Node Exporter for system metrics
-- **Log Aggregation:** Loki for log collection and storage
-- **Visualization:** Grafana dashboard for metrics and logs
-- **Web Access:** Grafana provides web interface for both metrics and logs
-- **Integration:** Add to docker-compose.yml, minimal config required
+- **Metrics Collection:** Prometheus (30–60s scrape, 7–15d retention) + Node Exporter + cAdvisor
+- **Log Aggregation:** Loki (7–14d retention, drop noisy logs) + Promtail
+- **Visualization:** Grafana (RAM limit ≤ 350 MB, refresh ≥ 30s)
+- **Access:** Tailscale or reverse-proxy under single TLS endpoint
 
 **Implementation Steps:**
 
-1. Add Prometheus, Loki, Grafana to docker-compose.yml
-2. Configure Node Exporter for system metrics
+1. Add Prometheus, Loki, Grafana to `docker-compose.yml`
+2. Configure Node Exporter and cAdvisor for metrics
 3. Set up Promtail for log shipping
-4. Create Grafana dashboards for system health
+4. Create Grafana dashboards for metrics and logs
 5. Configure alerting rules for critical metrics
-6. Document access and usage
+6. Document setup and usage
 
 **Files to Modify:**
 
@@ -48,14 +47,67 @@ Implement extensive logging system to monitor Raspberry Pi health metrics and ce
 
 ---
 
-#### 2. N8N Task Runner Implementation
+#### 2. Reverse Proxy with Traefik Integration
+
+**Status:** Planning  
+**Priority:** Medium-High  
+**Estimated Effort:** 2-3 days
+
+**Description:**  
+Implement Traefik reverse proxy for better Docker integration, SSL termination, and service routing.
+
+**Requirements:**
+
+- [ ] Replace direct port access with domain-based routing
+- [ ] Automatic SSL certificate management (Let's Encrypt integration)
+- [ ] Docker service auto-discovery
+- [ ] Centralized access control
+
+**Implementation Steps:**
+
+1. Add Traefik service to `docker-compose.yml`
+2. Configure Traefik with Docker provider
+3. Add labels to existing services for auto-discovery
+4. Set up SSL certificate management
+5. Update Tailscale integration for new routing
+6. Document new URLs and setup
+
+**Files to Modify:**
+
+- `docker-compose.yml` - Add Traefik service and labels
+- `config/traefik/` - New directory for Traefik configuration
+- `docs/` - Update documentation with new service URLs
+
+---
+
+### 🔧 Medium Priority
+
+#### 3. Enhanced Backup System
+
+**Status:** Improvement  
+**Priority:** Medium  
+**Estimated Effort:** 1 day
+
+**Description:**  
+Improve existing backup system with automated scheduling, retention policies, and health checks.
+
+**Requirements:**
+
+- [ ] Automated backup scheduling (cron integration)
+- [ ] Configurable retention policies
+- [ ] Backup health verification
+- [ ] Disk hygiene: NVMe trim + log rotation
+
+---
+
+#### 4. N8N Task Runner Implementation
 
 **Status:** Research Required  
-**Priority:** High  
+**Priority:** Medium  
 **Estimated Effort:** 1-2 days
 
 **Description:**  
-Investigate and implement task runner for n8n as mentioned in official documentation to improve workflow reliability and performance.
+Investigate and implement the n8n task runner to improve workflow reliability and performance.
 
 **Requirements:**
 
@@ -64,13 +116,6 @@ Investigate and implement task runner for n8n as mentioned in official documenta
 - [ ] Implement task runner configuration
 - [ ] Test workflow performance improvements
 - [ ] Update documentation
-
-**Research Questions:**
-
-- What specific benefits does the task runner provide?
-- How does it impact resource usage on Raspberry Pi?
-- Are there configuration requirements for existing workflows?
-- Does it require additional services or just configuration changes?
 
 **Implementation Steps:**
 
@@ -87,113 +132,13 @@ Investigate and implement task runner for n8n as mentioned in official documenta
 
 ---
 
-#### 3. Reverse Proxy with Traefik Integration
-
-**Status:** Planning  
-**Priority:** Medium-High  
-**Estimated Effort:** 2-3 days
-
-**Description:**  
-Implement Traefik reverse proxy for better Docker integration, SSL termination, and service routing.
-
-**Requirements:**
-
-- [ ] Replace direct port access with domain-based routing
-- [ ] Automatic SSL certificate management (Let's Encrypt integration)
-- [ ] Docker service auto-discovery
-- [ ] Load balancing capabilities for future scaling
-- [ ] Dashboard for monitoring proxy status
-
-**Benefits:**
-
-- Cleaner URLs (e.g., `n8n.homelab.local` instead of `localhost:5678`)
-- Automatic HTTPS for all services
-- Better security with centralized access control
-- Easier service management and scaling
-- Integration with existing Tailscale setup
-
-**Implementation Steps:**
-
-1. Add Traefik service to docker-compose.yml
-2. Configure Traefik with Docker provider
-3. Add labels to existing services for auto-discovery
-4. Set up SSL certificate management
-5. Update Tailscale integration for new routing
-6. Create Traefik dashboard access
-7. Update all documentation with new URLs
-
-**Files to Modify:**
-
-- `docker-compose.yml` - Add Traefik service and labels to existing services
-- `config/traefik/` - New directory for Traefik configuration
-- `scripts/setup.sh` - Update setup process for new routing
-- `docs/` - Update all documentation with new service URLs
-- `.env.example` - Add Traefik-related environment variables
-
----
-
-### 🔧 Medium Priority
-
-#### 4. Enhanced Backup System
-
-**Status:** Improvement  
-**Priority:** Medium  
-**Estimated Effort:** 1 day
-
-**Description:**  
-Improve existing backup system with automated scheduling, retention policies, and health checks.
-
-**Current State:** Basic backup scripts exist  
-**Improvements Needed:**
-
-- [ ] Automated backup scheduling (cron integration)
-- [ ] Configurable retention policies
-- [ ] Backup health verification
-- [ ] Remote backup storage options (S3, etc.)
-- [ ] Backup monitoring and alerting
-
----
-
-#### 5. Service Health Checks & Auto-Recovery
-
-**Status:** New Feature  
-**Priority:** Medium  
-**Estimated Effort:** 1-2 days
-
-**Description:**  
-Implement comprehensive health checks for all services with automatic recovery mechanisms.
-
-**Requirements:**
-
-- [ ] Docker health checks for all services
-- [ ] Service dependency management
-- [ ] Automatic restart policies
-- [ ] Health status monitoring
-- [ ] Integration with monitoring system
-
----
-
 ### 🎯 Low Priority / Future Enhancements
 
-#### 6. Container Security Hardening
+#### 5. Performance Optimization
 
-- [ ] Non-root user configurations
-- [ ] Security scanning integration
-- [ ] Network policy implementation
-- [ ] Secrets management improvement
-
-#### 7. Performance Optimization
-
+- [ ] Pin LLM cores: dedicate 3–4 cores to Ollama, 1 core to monitoring
 - [ ] Resource usage monitoring and optimization
-- [ ] Caching layer implementation
 - [ ] Database performance tuning
-- [ ] Workflow execution optimization
-
-#### 8. Multi-Environment Support
-
-- [ ] Development/staging environment configurations
-- [ ] Environment-specific compose files
-- [ ] Configuration templating system
 
 ---
 
@@ -225,10 +170,9 @@ Implement comprehensive health checks for all services with automatic recovery m
 | Feature           | Impact | Effort | Priority | Status      |
 | ----------------- | ------ | ------ | -------- | ----------- |
 | System Monitoring | High   | Medium | 1        | Planning    |
-| N8N Task Runner   | Medium | Low    | 2        | Research    |
 | Traefik Proxy     | High   | Medium | 3        | Planning    |
 | Enhanced Backups  | Medium | Low    | 4        | Improvement |
-| Health Checks     | Medium | Medium | 5        | Future      |
+| Performance       | Medium | Low    | 5        | Future      |
 
 ---
 
