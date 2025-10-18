@@ -32,9 +32,9 @@ run_n8n_cli() {
     docker exec "$N8N_CONTAINER" n8n "$command" $args
 }
 
-# Function to import workflows from files to n8n
+# Function to import workflows from files to n8n with cross-environment support
 import_workflows() {
-    log_info "Importing workflows to n8n using CLI..."
+    log_info "Importing workflows to n8n with cross-environment support..."
     
     if ! is_n8n_running; then
         log_error "n8n container is not running"
@@ -69,39 +69,7 @@ import_workflows() {
         [[ -f "$wf" ]] && log_info "  - $(basename "$wf")"
     done
     
-    # Get project ID from environment or workflow file
-    local project_id=""
-    local env_file="$(dirname "$(dirname "${SCRIPT_DIR}")")/.env"
-    
-    # Try to get from workflow files first (more reliable)
-    log_debug "Checking workflow files for project ID..."
-    for workflow_file in "${WORKFLOWS_DIR}"/*.json; do
-        [[ ! -f "$workflow_file" ]] && continue
-        
-        if jq empty "$workflow_file" 2>/dev/null; then
-            local file_project_id=$(jq -r '.shared[]?.project.id // empty' "$workflow_file" 2>/dev/null | head -1)
-            if [[ -n "$file_project_id" && "$file_project_id" != "null" ]]; then
-                project_id="$file_project_id"
-                log_info "Found project ID in workflow file: $project_id"
-                break
-            fi
-        fi
-    done
-    
-    # Fall back to environment variable if needed
-    if [[ -z "$project_id" || "$project_id" == "null" ]]; then
-        if [[ -f "$env_file" ]]; then
-            project_id=$(grep "^N8N_PROJECT_ID=" "$env_file" | cut -d'=' -f2- | tr -d '"' | tr -d "'" | xargs)
-            if [[ -n "$project_id" && "$project_id" != "null" ]]; then
-                log_info "Using project ID from .env: $project_id"
-            fi
-        fi
-    fi
-    
-    if [[ -z "$project_id" || "$project_id" == "null" ]]; then
-        log_warning "Could not determine project ID for import"
-        log_info "Proceeding with import without explicit project (will use default)"
-    fi
+    log_info "Using cross-environment import (no project ID dependency)"
     
     # Create temporary directory in container for workflow files
     log_debug "Creating temporary directory in container..."
@@ -131,9 +99,9 @@ import_workflows() {
             continue
         fi
         
-        # Prepare workflow data - clean up metadata that could cause conflicts
+        # Prepare workflow data - clean up metadata for cross-environment compatibility
         local temp_file="/tmp/${filename}"
-        log_debug "Preparing workflow file: $filename"
+        log_debug "Cleaning workflow for cross-environment import: $filename"
         jq --arg name "$workflow_name" '
             {
                 name: (.name // $name),
@@ -144,6 +112,7 @@ import_workflows() {
                 staticData: (.staticData // null),
                 tags: (.tags // []),
                 pinData: (.pinData // {})
+                # Explicitly exclude: id, createdAt, updatedAt, shared, projectId
             }
         ' "$workflow_file" > "$temp_file"
         
@@ -179,32 +148,17 @@ import_workflows() {
         log_warning "Skipped: $files_failed invalid file(s)"
     fi
     
-    # Import all workflows using n8n CLI
-    log_info "Executing import command..."
+    # Import workflows using cross-environment compatible method
+    log_info "Executing cross-environment import..."
     
-    # First, try importing with project ID if available
     local import_cmd="n8n import:workflow --separate --input=/tmp/workflows"
     local import_output
     local exit_code
     
-    if [[ -n "$project_id" && "$project_id" != "null" ]]; then
-        log_info "Attempting import with project ID: $project_id"
-        import_output=$(docker exec "$N8N_CONTAINER" $import_cmd --projectId="$project_id" 2>&1)
-        exit_code=$?
-        
-        # If import failed due to project not found, retry without project ID
-        if [[ $exit_code -ne 0 ]] && echo "$import_output" | grep -q "Could not find any entity of type \"Project\""; then
-            log_warning "⚠️  Project ID '$project_id' not found in this n8n instance"
-            log_info "This is normal for fresh n8n installations"
-            log_info "Retrying import without project ID (will use default project)..."
-            import_output=$(docker exec "$N8N_CONTAINER" $import_cmd 2>&1)
-            exit_code=$?
-        fi
-    else
-        log_info "No project ID specified, using default project"
-        import_output=$(docker exec "$N8N_CONTAINER" $import_cmd 2>&1)
-        exit_code=$?
-    fi
+    # Always import without project ID for cross-environment compatibility
+    log_info "Importing to default project (cross-environment safe)"
+    import_output=$(docker exec "$N8N_CONTAINER" $import_cmd 2>&1)
+    exit_code=$?
     
     if [[ $exit_code -eq 0 ]]; then
         log_success "✓ Successfully imported workflows to n8n"
@@ -229,8 +183,8 @@ import_workflows() {
         fi
         
         log_info ""
-        log_success "✓ Import complete! Please refresh your n8n web interface."
-        log_info "Note: If workflows don't appear, they may need activation in the UI."
+        log_success "✓ Cross-environment import complete! Workflows should be visible in UI."
+        log_info "Note: Workflows are imported to the default project and may need activation."
     else
         log_error "✗ Failed to import workflows"
         log_error "Exit code: $exit_code"
