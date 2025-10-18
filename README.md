@@ -216,10 +216,12 @@ docker stats
 
 ## 📋 Documentation
 
+- [🗺️ Roadmap & TODOs](docs/roadmap.md) - Planned improvements and features
 - [SSL Setup Guide](docs/ssl-troubleshooting.md)
 - [Tailscale Setup](docs/tailscale-ssl-setup.md)
 - [Hardware Guide](docs/hardware-setup.md)
 - [API Setup](docs/api-setup.md)
+- [Workflows](docs/workflows.md)
 
 ## 📄 License
 
