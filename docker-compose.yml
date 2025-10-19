@@ -31,9 +31,7 @@ services:
       - N8N_BASIC_AUTH_PASSWORD=${N8N_PASSWORD}
       - N8N_HOST=${N8N_HOST:-localhost}
       - N8N_PORT=5678
-      - N8N_PROTOCOL=https
-      - N8N_SSL_KEY=/certs/key.pem
-      - N8N_SSL_CERT=/certs/cert.pem
+      - N8N_PROTOCOL=http
       - WEBHOOK_URL=https://${N8N_HOST:-localhost}/
       - GENERIC_TIMEZONE=${TIMEZONE:-Europe/Warsaw}
       - DB_TYPE=postgresdb
@@ -54,14 +52,13 @@ services:
     volumes:
       - n8n_data:/home/node/.n8n
       - ./workflows:/home/node/.n8n/workflows
-      - ./config/ssl:/certs:ro
     networks:
       - homelab
     depends_on:
       postgres:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "--no-check-certificate", "https://localhost:5678/healthz"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5678/healthz"]
       interval: 30s
       timeout: 10s
       retries: 3
