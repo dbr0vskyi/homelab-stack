@@ -1,57 +1,31 @@
 {
-  "createdAt": "2025-10-17T22:06:25.578Z",
-  "updatedAt": "2025-10-17T22:06:25.578Z",
-  "id": "CiHH0m5objRMoLmv",
   "name": "gmail-to-telegram",
-  "active": false,
-  "isArchived": false,
   "nodes": [
     {
       "parameters": {
-        "rule": {
-          "interval": [
-            {
-              "field": "cronExpression",
-              "expression": "0 8 * * *"
-            }
-          ]
-        }
-      },
-      "id": "daily-schedule",
-      "name": "Daily Gmail Check",
-      "type": "n8n-nodes-base.schedule",
-      "typeVersion": 1.2,
-      "position": [
-        240,
-        300
-      ]
-    },
-    {
-      "parameters": {
-        "resource": "message",
         "operation": "getAll",
-        "returnAll": false,
-        "limit": 10,
+        "limit": 30,
         "simple": false,
-        "additionalFields": {
-          "labelIds": [
-            "INBOX"
-          ],
-          "q": "is:unread -from:me newer_than:1d"
-        }
+        "filters": {
+          "readStatus": "unread",
+          "receivedAfter": "={{ $today.minus(2, 'day').startOf('day').toISO() }}"
+        },
+        "options": {}
       },
       "id": "get-gmail-messages",
       "name": "Get Unread Emails",
       "type": "n8n-nodes-base.gmail",
       "typeVersion": 2,
       "position": [
-        460,
-        300
+        464,
+        304
       ],
+      "webhookId": "de438789-71b6-421a-b4ec-c8ff234aa80f",
+      "alwaysOutputData": true,
       "credentials": {
         "gmailOAuth2": {
-          "id": "gmail-oauth-credentials",
-          "name": "Gmail OAuth2"
+          "id": "52sKMHofP7P9AGpR",
+          "name": "Gmail account"
         }
       }
     },
@@ -59,9 +33,10 @@
       "parameters": {
         "conditions": {
           "options": {
-            "caseSensitive": false,
+            "caseSensitive": true,
             "leftValue": "",
-            "typeValidation": "strict"
+            "typeValidation": "strict",
+            "version": 1
           },
           "conditions": [
             {
@@ -71,6 +46,16 @@
               "operator": {
                 "type": "number",
                 "operation": "gt"
+              }
+            },
+            {
+              "id": "090360f7-5b35-4376-b041-18fb1eb89a46",
+              "leftValue": "={{ $json[0] }}",
+              "rightValue": "",
+              "operator": {
+                "type": "object",
+                "operation": "notEmpty",
+                "singleValue": true
               }
             }
           ],
@@ -83,22 +68,134 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
       "position": [
-        680,
-        300
+        656,
+        304
+      ],
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "jsCode": "// Single Code node: per-email Telegram messages + final daily summary\n// Uses ONLY the JSON inside `response` for each input item.\n\n// ---------- helpers ----------\nfunction toObj(r) {\n  if (r == null) return {};\n  if (typeof r === 'string') { try { return JSON.parse(r); } catch { return {}; } }\n  if (typeof r === 'object') return r;\n  return {};\n}\n\nfunction cleanFromName(s) {\n  if (!s) return 'Unknown sender';\n  let out = String(s);\n  if (out.includes('<')) out = out.split('<')[0].trim();\n  if (out.includes('|')) out = out.split('|')[0].trim();\n  return out.replace(/(^\"|\"$)/g, '') || 'Unknown sender';\n}\n\nfunction formatActions(actions) {\n  if (!Array.isArray(actions) || actions.length === 0) return '';\n  const rows = actions.map((a) => {\n    if (typeof a === 'string') {\n      // Try \"Label: URL\"\n      const parts = a.split(':');\n      if (parts.length >= 2) {\n        const label = parts.shift().trim();\n        const rest = parts.join(':').trim();\n        const m = rest.match(/https?:\\/\\/\\S+/);\n        if (m) return `- [${label}](${m[0]})`;\n      }\n      const m = a.match(/https?:\\/\\/\\S+/);\n      if (m) return `- [Open link](${m[0]})`;\n      return `- ${a}`;\n    } else if (a && typeof a === 'object') {\n      const label = a.label || a.title || 'Open link';\n      const url = a.url || a.href;\n      if (url) return `- [${label}](${url})`;\n      return `- ${label}`;\n    }\n    return null;\n  }).filter(Boolean);\n  return rows.length ? `\\n**Actions:**\\n${rows.join('\\n')}` : '';\n}\n\n// ---------- main ----------\nconst items = $input.all();\nconst perEmailOutputs = [];\nconst agg = {\n  total: 0,\n  important: 0,\n  byCategory: {},               // { category: count }\n  importantList: [],            // collect important subjects for \"top important\"\n};\n\nfor (const it of items) {\n  const env = toObj(it.json?.response); // <-- only source of truth\n\n  const isImportant = !!env.isImportant;\n  const from = cleanFromName(env.from || 'Unknown sender');\n  const subject = env.subject || 'No subject';\n  const category = env.category || 'Uncategorized';\n  const receivedDate = env.receivedDate || new Date().toISOString();\n  const gmailUrl = env.gmailUrl || '#';\n  const summary = env.summary || 'No summary';\n  const actions = Array.isArray(env.actions) ? env.actions : [];\n\n  // Aggregate\n  agg.total += 1;\n  if (isImportant) agg.important += 1;\n  agg.byCategory[category] = (agg.byCategory[category] || 0) + 1;\n  if (isImportant) {\n    agg.importantList.push({ subject, from });\n  }\n\n  // Per-email message\n  const priorityEmoji = isImportant ? '🔴' : '📧';\n  const actionsBlock = formatActions(actions);\n\n  const message =\n    `${priorityEmoji} **Email Summary**\\n\\n` +\n    `**From:** ${from}\\n` +\n    `**Subject:** ${subject}\\n` +\n    `**Category:** ${category}\\n` +\n    `**Received:** ${new Date(receivedDate).toLocaleString()}\\n\\n` +\n    `**Summary:**\\n${summary}${actionsBlock}\\n\\n` +\n    `[Open in Gmail](${gmailUrl})`;\n\n  perEmailOutputs.push({\n    json: {\n      message,\n      isImportant,\n      subject,\n      from,\n      category,\n      receivedDate,\n      gmailUrl,\n      summary,\n      actions,\n      isSummary: false,\n    },\n  });\n}\n\n// If no emails, return just a \"no new emails\" summary\nif (agg.total === 0) {\n  return [{\n    json: {\n      message: '📧 Daily Gmail scan complete — no new emails found.',\n      totalEmails: 0,\n      importantEmails: 0,\n      byCategory: {},\n      finishedAt: new Date().toLocaleString(),\n      isSummary: true,\n    },\n  }];\n}\n\n// Build final daily summary message\nconst catLines = Object.entries(agg.byCategory)\n  .sort((a, b) => b[1] - a[1])\n  .map(([cat, n]) => `• ${cat}: ${n}`)\n  .join('\\n');\n\nconst topImportantLines = agg.importantList\n  .slice(0, 5)\n  .map(e => `- **${e.subject || 'No subject'}** — ${e.from || 'Unknown sender'}`)\n  .join('\\n');\n\nconst finishedAt = new Date().toLocaleString();\n\nlet summaryMessage =\n  `📊 **Daily Gmail Summary**\\n\\n` +\n  `📧 Total emails processed: ${agg.total}\\n` +\n  `🔴 Important emails: ${agg.important}\\n`;\n\nif (catLines) {\n  summaryMessage += `\\n**By category:**\\n${catLines}\\n`;\n}\nif (topImportantLines) {\n  summaryMessage += `\\n**Top important:**\\n${topImportantLines}\\n`;\n}\n\nsummaryMessage += `\\n✅ Individual summaries were sent above.\\n\\n` +\n                  `_Scan completed at ${finishedAt}_`;\n\n// Append summary as the last item\nperEmailOutputs.push({\n  json: {\n    message: summaryMessage,\n    totalEmails: agg.total,\n    importantEmails: agg.important,\n    byCategory: agg.byCategory,\n    finishedAt,\n    isSummary: true,\n  },\n});\n\nreturn perEmailOutputs;"
+      },
+      "id": "format-telegram-message",
+      "name": "Format for Telegram",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1552,
+        304
       ]
     },
     {
       "parameters": {
-        "jsCode": "// Filter and process emails for important content\nconst emails = $input.all();\nconst importantEmails = [];\n\n// Keywords that indicate important/actionable content\nconst importantKeywords = [\n  'action required', 'please review', 'urgent', 'deadline',\n  'follow up', 'response needed', 'approval', 'feedback',\n  'meeting', 'schedule', 'reminder', 'invoice', 'payment',\n  'security', 'alert', 'verification', 'confirm'\n];\n\nfor (const email of emails) {\n  const subject = email.json.payload?.headers?.find(h => \n    h.name === 'Subject'\n  )?.value || '';\n  \n  const from = email.json.payload?.headers?.find(h => \n    h.name === 'From'\n  )?.value || '';\n  \n  // Get email body (simplified)\n  const body = email.json.snippet || '';\n  \n  // Check if email contains important keywords\n  const isImportant = importantKeywords.some(keyword =>\n    subject.toLowerCase().includes(keyword) ||\n    body.toLowerCase().includes(keyword)\n  );\n  \n  // Add all emails but mark importance\n  importantEmails.push({\n    id: email.json.id,\n    subject: subject,\n    from: from,\n    body: body,\n    isImportant: isImportant,\n    receivedDate: new Date(parseInt(email.json.internalDate)).toISOString(),\n    gmailUrl: `https://mail.google.com/mail/u/0/#inbox/${email.json.id}`\n  });\n}\n\n// Sort by importance, then by date\nimportantEmails.sort((a, b) => {\n  if (a.isImportant && !b.isImportant) return -1;\n  if (!a.isImportant && b.isImportant) return 1;\n  return new Date(b.receivedDate) - new Date(a.receivedDate);\n});\n\nreturn importantEmails.map(email => ({ json: email }));"
+        "chatId": "={{ 219678893 }}",
+        "text": "={{ $json.message }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
       },
-      "id": "process-and-filter-emails",
-      "name": "Process Emails",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
+      "id": "send-telegram-message",
+      "name": "Send to Telegram",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
       "position": [
-        900,
-        300
-      ]
+        1728,
+        304
+      ],
+      "webhookId": "bb5d0404-e164-49b9-8f65-2df8d5aa2e10",
+      "credentials": {
+        "telegramApi": {
+          "id": "h7RbmzMEg5YYOgNt",
+          "name": "Emails Summary Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 4
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        272,
+        304
+      ],
+      "id": "c54f948e-47f4-486a-a897-94c4a11b09fd",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "e0f5d3a2-366b-44db-9dd3-033d6b9f7a80",
+              "name": "id",
+              "value": "={{ $json.id }}",
+              "type": "string"
+            },
+            {
+              "id": "e22e7ea8-4364-426d-a457-afce4bfa6625",
+              "name": "to",
+              "value": "={{ $json.to.text }}",
+              "type": "string"
+            },
+            {
+              "id": "0c71a3c0-6aff-4336-b82f-4c21fc514cd9",
+              "name": "fromAddress",
+              "value": "={{ $json.from.value[0].address }}",
+              "type": "string"
+            },
+            {
+              "id": "42822dc7-4c9b-433c-8965-d326036dad98",
+              "name": "fromName",
+              "value": "={{ $json.from.value[0].name }}",
+              "type": "string"
+            },
+            {
+              "id": "b6a55194-7dcb-4f0a-a048-b09eef1ce6e6",
+              "name": "subject",
+              "value": "={{ $json.subject }}",
+              "type": "string"
+            },
+            {
+              "id": "ea1c5a43-f3fa-4af5-ba9d-ecd3946ba6a8",
+              "name": "text",
+              "value": "={{ $json.text }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        928,
+        304
+      ],
+      "id": "161185c0-b1df-4bf0-80c9-b6d141765760",
+      "name": "Map Email Fields"
+    },
+    {
+      "parameters": {
+        "options": {
+          "reset": false
+        }
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        1216,
+        304
+      ],
+      "id": "ebafcb48-c359-4567-8ef9-df65207b4e7b",
+      "name": "Loop Over Emails"
     },
     {
       "parameters": {
@@ -118,129 +215,58 @@
           "parameters": [
             {
               "name": "model",
-              "value": "qwen2.5:7b"
+              "value": "llama3.2:3b"
             },
             {
               "name": "prompt",
-              "value": "Analyze this email and create a concise summary. Focus on key information, urgency, and any required actions. Keep it under 200 words.\\n\\nFrom: {{ $json.from }}\\nSubject: {{ $json.subject }}\\nContent: {{ $json.body }}\\n\\nProvide a clear, actionable summary:"
+              "value": "=You are an advanced AI assistant tasked with summarizing emails. Your goal is to extract the most relevant and actionable information from the provided email data. Follow these instructions carefully:\n\nSummarize the content: Provide a concise summary of the email's main points, focusing on the purpose, key details, and any calls to action.\nCategorize the email: Identify the category of the email (e.g., \"Account Notification,\" \"Promotional Offer,\" \"Social Media Update,\" etc.).\nHighlight actions: List any specific actions the recipient is encouraged to take, such as clicking a link, replying, or completing a task.\nIgnore irrelevant details: Exclude unnecessary information, such as long URLs, disclaimers, or repetitive content.\nFormat the output: Return the summary in the following JSON structure:\n{\n  \"subject\": \"The subject of email\",\n  \"from\": \"Sent from information\",\n  \"isImportant\": \"true or false based on if this email can be something really important\"\n  \"summary\": \"A concise summary of the email content.\",\n  \"category\": \"Email category\",\n  \"actions\": [\n    \"Action 1\",\n    \"Action 2\"\n  ]\n}\n\nGuidelines:\n- Use concise language.\n- Prioritize clarity and relevance.\n- Ensure the output is well-structured and adheres to the JSON format.\n\nInput Data:\n\nTo: {{ $json.to }}\nFrom: {{ $json.fromAddress }} | {{ $json.fromName }}\nSubject: {{ $json.subject }}\nText:\n{{ $json.text }}\n\nOutput only result json following the mentioned structure."
             },
             {
               "name": "stream",
               "value": false
             }
           ]
+        },
+        "options": {
+          "timeout": 3600000
         }
       },
       "id": "analyze-email-llm",
-      "name": "Analyze with LLM",
+      "name": "Summarise Email with LLM",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        1120,
-        300
+        1376,
+        384
       ]
     },
     {
       "parameters": {
-        "jsCode": "// Prepare email summary for Telegram\nconst emailData = $('Process Emails').first().json;\nconst llmResponse = $input.first().json;\n\nlet summary;\ntry {\n  summary = JSON.parse(llmResponse.response).response || llmResponse.response;\n} catch (error) {\n  summary = llmResponse.response || 'Unable to generate summary';\n}\n\n// Create formatted message\nconst priorityEmoji = emailData.isImportant ? '🔴' : '📧';\nconst fromName = emailData.from.includes('<') ? \n  emailData.from.split('<')[0].trim().replace(/\"/g, '') : \n  emailData.from;\n\nconst message = `${priorityEmoji} **Email Summary**\\n\\n` +\n  `**From:** ${fromName}\\n` +\n  `**Subject:** ${emailData.subject}\\n` +\n  `**Received:** ${new Date(emailData.receivedDate).toLocaleString()}\\n\\n` +\n  `**Summary:**\\n${summary}\\n\\n` +\n  `[Open in Gmail](${emailData.gmailUrl})`;\n\nreturn {\n  json: {\n    message: message,\n    isImportant: emailData.isImportant,\n    subject: emailData.subject,\n    from: fromName\n  }\n};"
-      },
-      "id": "format-telegram-message",
-      "name": "Format for Telegram",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        1340,
-        300
-      ]
-    },
-    {
-      "parameters": {
-        "chatId": "={{ $env.TELEGRAM_CHAT_ID }}",
-        "text": "={{ $json.message }}",
-        "parseMode": "Markdown"
-      },
-      "id": "send-telegram-message",
-      "name": "Send to Telegram",
-      "type": "n8n-nodes-base.telegram",
-      "typeVersion": 1.2,
-      "position": [
-        1560,
-        300
-      ],
-      "credentials": {
-        "telegramApi": {
-          "id": "telegram-bot-credentials",
-          "name": "Telegram Bot API"
+        "chatId": "={{ 219678893 }}",
+        "text": "📧 Daily Gmail scan complete - no new emails found.",
+        "additionalFields": {
+          "appendAttribution": false
         }
-      }
-    },
-    {
-      "parameters": {
-        "jsCode": "// Collect all processed emails for final summary\nconst processedEmails = $input.all();\nconst totalEmails = processedEmails.length;\nconst importantCount = processedEmails.filter(email => email.json.isImportant).length;\n\nif (totalEmails === 0) {\n  return {\n    json: {\n      message: '📧 Daily Gmail scan complete - no new emails found.',\n      totalEmails: 0,\n      importantEmails: 0\n    }\n  };\n}\n\nconst summaryMessage = \n  `📊 **Daily Gmail Summary**\\n\\n` +\n  `📧 Total emails processed: ${totalEmails}\\n` +\n  `🔴 Important emails: ${importantCount}\\n` +\n  `✅ All summaries sent above\\n\\n` +\n  `_Scan completed at ${new Date().toLocaleString()}_`;\n\nreturn {\n  json: {\n    message: summaryMessage,\n    totalEmails: totalEmails,\n    importantEmails: importantCount\n  }\n};"
       },
-      "id": "create-final-summary",
-      "name": "Create Final Summary",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        1780,
-        300
-      ]
-    },
-    {
-      "parameters": {
-        "chatId": "={{ $env.TELEGRAM_CHAT_ID }}",
-        "text": "={{ $json.message }}",
-        "parseMode": "Markdown"
-      },
-      "id": "send-final-summary",
-      "name": "Send Daily Summary",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        2000,
-        300
-      ],
-      "credentials": {
-        "telegramApi": {
-          "id": "telegram-bot-credentials",
-          "name": "Telegram Bot API"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "chatId": "={{ $env.TELEGRAM_CHAT_ID }}",
-        "text": "📧 Daily Gmail scan complete - no new emails found."
-      },
-      "id": "send-no-emails-message",
-      "name": "No Emails Message",
-      "type": "n8n-nodes-base.telegram",
-      "typeVersion": 1.2,
-      "position": [
-        900,
+        928,
         480
       ],
+      "id": "b01cc065-ac24-4dfa-8e6a-9dffc1df56dd",
+      "name": "Send a text message1",
+      "webhookId": "ea8088a1-7a12-4dc2-b691-9e3d3d37cab1",
       "credentials": {
         "telegramApi": {
-          "id": "telegram-bot-credentials",
-          "name": "Telegram Bot API"
+          "id": "h7RbmzMEg5YYOgNt",
+          "name": "Emails Summary Bot"
         }
       }
     }
   ],
+  "pinData": {},
   "connections": {
-    "Daily Gmail Check": {
-      "main": [
-        [
-          {
-            "node": "Get Unread Emails",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
     "Get Unread Emails": {
       "main": [
         [
@@ -256,36 +282,14 @@
       "main": [
         [
           {
-            "node": "Process Emails",
+            "node": "Map Email Fields",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "No Emails Message",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Process Emails": {
-      "main": [
-        [
-          {
-            "node": "Analyze with LLM",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Analyze with LLM": {
-      "main": [
-        [
-          {
-            "node": "Format for Telegram",
+            "node": "Send a text message1",
             "type": "main",
             "index": 0
           }
@@ -305,20 +309,54 @@
     },
     "Send to Telegram": {
       "main": [
+        []
+      ]
+    },
+    "Schedule Trigger": {
+      "main": [
         [
           {
-            "node": "Create Final Summary",
+            "node": "Get Unread Emails",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Create Final Summary": {
+    "Map Email Fields": {
       "main": [
         [
           {
-            "node": "Send Daily Summary",
+            "node": "Loop Over Emails",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Emails": {
+      "main": [
+        [
+          {
+            "node": "Format for Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Summarise Email with LLM",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Summarise Email with LLM": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Emails",
             "type": "main",
             "index": 0
           }
@@ -326,38 +364,22 @@
       ]
     }
   },
+  "active": false,
   "settings": {
     "executionOrder": "v1"
   },
-  "staticData": null,
-  "meta": null,
-  "pinData": {},
-  "versionId": null,
-  "triggerCount": 0,
+  "versionId": "b5b69604-680a-47f1-a9b6-34aac29956df",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "f6850b7a742915e4beea1da1d7e81ab301286f32549db44a9ced290422cc1c31"
+  },
+  "id": "5YHHqqqLCxRFvISB",
   "tags": [
     {
       "createdAt": "2024-01-01T00:00:00.000Z",
       "updatedAt": "2024-01-01T00:00:00.000Z",
       "id": "gmail-automation",
       "name": "Gmail Automation"
-    }
-  ],
-  "shared": [
-    {
-      "createdAt": "2025-10-17T22:06:25.578Z",
-      "updatedAt": "2025-10-17T22:06:25.578Z",
-      "role": "workflow:owner",
-      "workflowId": "CiHH0m5objRMoLmv",
-      "projectId": "PTDcIHwvy2eBoTf7",
-      "project": {
-        "createdAt": "2025-10-17T09:33:56.423Z",
-        "updatedAt": "2025-10-17T09:33:56.423Z",
-        "id": "PTDcIHwvy2eBoTf7",
-        "name": "Unnamed Project",
-        "type": "personal",
-        "icon": null,
-        "description": null
-      }
     }
   ]
 }
