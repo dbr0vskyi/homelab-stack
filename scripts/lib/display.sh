@@ -9,6 +9,7 @@ show_info() {
     echo
     
     show_service_urls
+    show_tailscale_info
     show_credentials
     show_ssl_info
     show_next_steps
@@ -55,7 +56,8 @@ show_next_steps() {
     echo "  1. Configure your API tokens in the .env file"
     echo "  2. Access n8n and import workflow templates"
     echo "  3. Set up your Telegram bot and Notion integration"
-    echo "  4. Test the automation workflows"
+    echo "  4. Create webhook workflows in n8n (path: 'telegram' for Telegram webhooks)"
+    echo "  5. Test the automation workflows"
     echo
 }
 
@@ -73,4 +75,31 @@ show_management_commands() {
     echo "  🔄 Restart: docker compose restart"
     echo "  🛑 Stop: docker compose down"
     echo "  🗄️ Backup: ./scripts/backup.sh"
+    echo "  🌐 Setup funnel: ./scripts/setup.sh funnel"
+    echo "  🚫 Stop funnel: ./scripts/setup.sh funnel-stop"
+}
+
+show_tailscale_info() {
+    # Check if Tailscale library functions are available
+    if ! command -v is_tailscale_installed &>/dev/null; then
+        return 0
+    fi
+    
+    if is_tailscale_installed && is_tailscale_connected; then
+        log_info "Tailscale Integration:"
+        
+        if get_tailscale_self_info 2>/dev/null; then
+            echo "  🌍 External URL: https://${TAILSCALE_DNS_NAME}/"
+            echo "  🪝 Webhook URL: https://${TAILSCALE_DNS_NAME}/webhook/"
+            
+            if is_tailscale_funnel_enabled; then
+                echo "  ✅ Funnel Status: Active (external access enabled)"
+            else
+                echo "  ⚠️  Funnel Status: Inactive (run './scripts/setup.sh funnel' to enable)"
+            fi
+        else
+            echo "  🔗 Connected to Tailscale (run './scripts/setup.sh funnel' for external access)"
+        fi
+        echo
+    fi
 }

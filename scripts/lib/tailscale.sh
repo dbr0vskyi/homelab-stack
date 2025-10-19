@@ -447,3 +447,69 @@ is_tailscale_domain() {
     
     return 1
 }
+
+# Check if Tailscale funnel is enabled
+is_tailscale_funnel_enabled() {
+    local port="${1:-443}"
+    tailscale funnel status 2>/dev/null | grep -q "https://.*:$port" || tailscale funnel status 2>/dev/null | grep -q "Funnel on"
+}
+
+# Setup Tailscale funnel for n8n
+setup_tailscale_funnel() {
+    local n8n_port="${1:-8443}"
+    local external_port="${2:-443}"
+    
+    log_info "Setting up Tailscale funnel for n8n..."
+    
+    # Check if Tailscale is connected
+    if ! is_tailscale_connected; then
+        log_error "Tailscale is not connected. Please connect to Tailscale first."
+        return 1
+    fi
+    
+    # Get Tailscale device info
+    if ! get_tailscale_self_info; then
+        log_error "Failed to get Tailscale device information"
+        return 1
+    fi
+    
+    # Stop existing funnel if running
+    if is_tailscale_funnel_enabled "$external_port"; then
+        log_info "Stopping existing Tailscale funnel on port $external_port..."
+        tailscale funnel --https="$external_port" off 2>/dev/null || true
+    fi
+    
+    # Start funnel for n8n
+    log_info "Starting Tailscale funnel: external port $external_port -> internal port $n8n_port"
+    
+    if tailscale funnel --bg --https="$external_port" "$n8n_port" 2>/dev/null; then
+        log_success "Tailscale funnel started successfully"
+        log_info "n8n is now accessible at: https://${TAILSCALE_DNS_NAME}/"
+        log_info "Webhook endpoint: https://${TAILSCALE_DNS_NAME}/webhook/"
+        return 0
+    else
+        log_error "Failed to start Tailscale funnel"
+        return 1
+    fi
+}
+
+# Stop Tailscale funnel
+stop_tailscale_funnel() {
+    local external_port="${1:-443}"
+    
+    if is_tailscale_funnel_enabled "$external_port"; then
+        log_info "Stopping Tailscale funnel on port $external_port..."
+        tailscale funnel --https="$external_port" off
+        log_success "Tailscale funnel stopped"
+    else
+        log_info "No Tailscale funnel running on port $external_port"
+    fi
+}
+
+# Show Tailscale funnel status
+show_tailscale_funnel_status() {
+    log_info "Tailscale funnel status:"
+    echo
+    tailscale funnel status || log_warning "No funnel configuration found"
+    echo
+}
