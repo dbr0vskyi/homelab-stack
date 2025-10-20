@@ -50,7 +50,7 @@
             },
             {
               "id": "090360f7-5b35-4376-b041-18fb1eb89a46",
-              "leftValue": "={{ $json[0] }}",
+              "leftValue": "={{ $input.first() }}",
               "rightValue": "",
               "operator": {
                 "type": "object",
@@ -372,7 +372,7 @@
     "availableInMCP": false,
     "errorWorkflow": "5YHHqqqLCxRFvISB"
   },
-  "versionId": "65a723a5-a82c-426d-869e-48cea073e118",
+  "versionId": "43d72ff6-9996-4f46-8ed3-a12d2f80bc70",
   "meta": {
     "templateCredsSetupCompleted": true,
     "instanceId": "f6850b7a742915e4beea1da1d7e81ab301286f32549db44a9ced290422cc1c31"
