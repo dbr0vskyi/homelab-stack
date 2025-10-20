@@ -134,11 +134,104 @@ Investigate and implement the n8n task runner to improve workflow reliability an
 
 ### 🎯 Low Priority / Future Enhancements
 
-#### 5. Performance Optimization
+#### 5. Hardware Performance Optimization
+
+**Status:** Research & Testing  
+**Priority:** Low  
+**Estimated Effort:** 1-2 days
+
+**Description:**  
+Implement and test hardware optimizations from the hardware setup guide to improve system performance.
+
+**Requirements:**
 
 - [ ] Pin LLM cores: dedicate 3–4 cores to Ollama, 1 core to monitoring
-- [ ] Resource usage monitoring and optimization
-- [ ] Database performance tuning
+- [ ] Test different memory configurations for optimal performance
+- [ ] Implement CPU governor tuning for better performance/efficiency balance
+- [ ] Compare performance results before and after optimizations
+- [ ] Document performance improvements and resource usage
+
+**Implementation Steps:**
+
+1. Establish baseline performance metrics
+2. Apply hardware optimizations from hardware-setup.md
+3. Test CPU core pinning for Ollama workloads
+4. Benchmark memory configuration changes
+5. Document performance comparisons and recommendations
+
+**Files to Modify:**
+
+- System configuration files (boot config, systemd)
+- `docs/hardware-setup.md` - Update with tested optimizations and results
+
+---
+
+## 🔄 Workflow Improvements
+
+### 📧 Gmail to Telegram Workflow Enhancements
+
+#### 1. Multi-User Support Implementation
+
+**Status:** Planning  
+**Priority:** Medium  
+**Estimated Effort:** 2-3 days
+
+**Description:**  
+Enhance the Gmail to Telegram workflow to support multiple users instead of the current single hardcoded chat implementation.
+
+**Current Limitations:**
+
+- Only one hardcoded chat ID is supported
+- No user authorization flow
+- Manual setup required for each new user
+
+**Requirements:**
+
+- [ ] Implement dynamic chat ID recording and storage
+- [ ] Create user authorization flow for Gmail access
+- [ ] Store chat IDs persistently (database or file-based)
+- [ ] Implement setup actions when bot is started
+- [ ] Trigger automatic schedule creation for new users
+- [ ] Add user management interface or commands
+
+**Technical Approach:**
+
+- **Chat ID Storage:** Use Redis or PostgreSQL to store user chat IDs
+- **Authorization Flow:** Implement OAuth callback handling for Gmail
+- **Bot Interaction:** Add /setup command to initialize user configuration
+- **Schedule Management:** Automatically create individual schedules per user
+
+**Implementation Steps:**
+
+1. Modify n8n workflow to support dynamic chat ID lookup
+2. Implement user registration flow via Telegram bot commands
+3. Add Gmail OAuth authorization handling
+4. Create persistent storage for user configurations
+5. Implement automatic schedule creation per user
+6. Add user management and cleanup functionality
+7. Update documentation with multi-user setup instructions
+
+**Files to Modify:**
+
+- `workflows/gmail-to-telegram.json` - Update workflow for multi-user support
+- `config/postgres/init.sql` - Add user management tables (if using PostgreSQL)
+- `docs/workflows.md` - Document multi-user setup process
+
+#### 2. Enhanced Error Handling & Notifications
+
+**Status:** Future Enhancement  
+**Priority:** Low  
+**Estimated Effort:** 1 day
+
+**Description:**  
+Improve workflow reliability with better error handling and user notifications.
+
+**Requirements:**
+
+- [ ] Implement retry mechanisms for failed API calls
+- [ ] Add user notifications for workflow failures
+- [ ] Create workflow health monitoring
+- [ ] Add rate limiting awareness for Gmail API
 
 ---
 
@@ -167,12 +260,14 @@ Investigate and implement the n8n task runner to improve workflow reliability an
 
 ## 📊 Implementation Priority Matrix
 
-| Feature           | Impact | Effort | Priority | Status      |
-| ----------------- | ------ | ------ | -------- | ----------- |
-| System Monitoring | High   | Medium | 1        | Planning    |
-| Traefik Proxy     | High   | Medium | 3        | Planning    |
-| Enhanced Backups  | Medium | Low    | 4        | Improvement |
-| Performance       | Medium | Low    | 5        | Future      |
+| Feature                 | Impact | Effort | Priority | Status      |
+| ----------------------- | ------ | ------ | -------- | ----------- |
+| System Monitoring       | High   | Medium | 1        | Planning    |
+| Traefik Proxy           | High   | Medium | 2        | Planning    |
+| Multi-User Workflows    | Medium | High   | 3        | Planning    |
+| Enhanced Backups        | Medium | Low    | 4        | Improvement |
+| Hardware Optimization   | Medium | Low    | 5        | Research    |
+| Workflow Error Handling | Low    | Low    | 6        | Future      |
 
 ---
 
@@ -195,5 +290,5 @@ Investigate and implement the n8n task runner to improve workflow reliability an
 
 ---
 
-_Last Updated: October 18, 2025_  
+_Last Updated: October 20, 2025_  
 _Next Review: Weekly during active development_
