@@ -1,0 +1,225 @@
+{
+  "name": "Ollama Echo",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -176,
+        0
+      ],
+      "id": "ff1571a8-70ab-4946-ba3a-876b0144d71e",
+      "name": "Telegram Trigger",
+      "webhookId": "1538a756-cd51-4bb0-9617-fbade5d40849",
+      "credentials": {
+        "telegramApi": {
+          "id": "jN95U7DojRiJk4kR",
+          "name": "Ollama Echo Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://ollama:11434/api/generate",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "model",
+              "value": "={{ $('Filter').item.json.message.text.match(/\\bmodel:\\s*([a-z0-9_.:-]+)/i) ? $('Filter').item.json.message.text.match(/\\bmodel:\\s*([a-z0-9_.:-]+)/i)[1] : 'llama3.2:3b' }}"
+            },
+            {
+              "name": "prompt",
+              "value": "={{ $('Filter').item.json.message.text.replaceAll(/\\bmodel:\\s*([a-z0-9_.:-]+)/ig, '') }}"
+            },
+            {
+              "name": "stream",
+              "value": false
+            }
+          ]
+        },
+        "options": {
+          "timeout": 3600000
+        }
+      },
+      "id": "50faff3a-9a9f-4e9b-8092-b0039f62201c",
+      "name": "Summarise Email with LLM",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        416,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+        "text": "=📊 *LLM Run Metrics*\n\n• Model: {{ $json.model || 'n/a' }}\n\n• Total time: {{ $json.total_duration ? ($json.total_duration/1e9).toFixed(2) : 'n/a' }} s\n• Load time: {{ $json.load_duration ? ($json.load_duration/1e9).toFixed(2) : 'n/a' }} s\n• Load share: {{ ($json.load_duration && $json.total_duration) ? (($json.load_duration/$json.total_duration)*100).toFixed(1) : 'n/a' }}%\n\n• Prompt tokens: {{ $json.prompt_eval_count ?? 'n/a' }}\n• Prompt time: {{ $json.prompt_eval_duration ? ($json.prompt_eval_duration/1e9).toFixed(2) : 'n/a' }} s\n• Prompt TPS: {{ ($json.prompt_eval_count && $json.prompt_eval_duration) ? ($json.prompt_eval_count / ($json.prompt_eval_duration/1e9)).toFixed(2) : 'n/a' }} tok/s\n• Prompt ms/token: {{ ($json.prompt_eval_count && $json.prompt_eval_duration) ? (($json.prompt_eval_duration/$json.prompt_eval_count)/1e6).toFixed(1) : 'n/a' }} ms\n\n{{ ($json.eval_count ? '• Output tokens: ' + $json.eval_count : '') }}\n{{ ($json.eval_duration ? '• Output time: ' + ($json.eval_duration/1e9).toFixed(2) + ' s' : '') }}\n{{ ($json.eval_count && $json.eval_duration ? '• Output TPS: ' + ($json.eval_count/($json.eval_duration/1e9)).toFixed(2) + ' tok/s' : '') }}\n{{ ($json.eval_count && $json.eval_duration ? '• Output ms/token: ' + (($json.eval_duration/$json.eval_count)/1e6).toFixed(1) + ' ms' : '') }}\n\n• End-to-end TPS: {{ ($json.total_duration && (($json.prompt_eval_count||0)+($json.eval_count||0))) ? (((($json.prompt_eval_count||0)+($json.eval_count||0))/($json.total_duration/1e9)).toFixed(2)) : 'n/a' }} tok/s\n• IO token ratio (out/in): {{ ($json.eval_count && $json.prompt_eval_count) ? ($json.eval_count/$json.prompt_eval_count).toFixed(2) : 'n/a' }}\n\n— — —\n*Response:*\n{{ $json.response || '' }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        592,
+        0
+      ],
+      "id": "8c2d2433-d49a-4a42-8258-727f3d95fde7",
+      "name": "Send a text message",
+      "webhookId": "c97117ed-01c0-4316-b928-f381986e03ba",
+      "credentials": {
+        "telegramApi": {
+          "id": "jN95U7DojRiJk4kR",
+          "name": "Ollama Echo Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "08f16a72-a433-44f5-9fdc-a9f9eb978070",
+              "leftValue": "={{ $json.message.from.username }}",
+              "rightValue": "dbr0vskyi",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            },
+            {
+              "id": "47af75e1-8116-4b57-ba90-1127f47bbf5e",
+              "leftValue": "={{ $json.message.text }}",
+              "rightValue": "Starting processing message",
+              "operator": {
+                "type": "string",
+                "operation": "notStartsWith"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.2,
+      "position": [
+        32,
+        0
+      ],
+      "id": "6c740057-6b2f-443f-8995-a16fdb099055",
+      "name": "Filter"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+        "text": "=Starting processing message \"{{ $json.message.text }}\" (raw)...",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        224,
+        0
+      ],
+      "id": "107b2bd4-2b56-4a60-acbd-e980489745be",
+      "name": "Send a text message1",
+      "webhookId": "c97117ed-01c0-4316-b928-f381986e03ba",
+      "credentials": {
+        "telegramApi": {
+          "id": "jN95U7DojRiJk4kR",
+          "name": "Ollama Echo Bot"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Filter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Summarise Email with LLM": {
+      "main": [
+        [
+          {
+            "node": "Send a text message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a text message": {
+      "main": [
+        []
+      ]
+    },
+    "Filter": {
+      "main": [
+        [
+          {
+            "node": "Send a text message1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a text message1": {
+      "main": [
+        [
+          {
+            "node": "Summarise Email with LLM",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "22d4a79d-c32e-445e-89ce-8eeb7aca77d1",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "f6850b7a742915e4beea1da1d7e81ab301286f32549db44a9ced290422cc1c31"
+  },
+  "id": "QpxLQCHMDRprWZQg",
+  "tags": []
+}
