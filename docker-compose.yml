@@ -47,6 +47,7 @@ services:
       - EXECUTIONS_DATA_SAVE_ON_ERROR=all
       - EXECUTIONS_DATA_SAVE_ON_SUCCESS=all
       - EXECUTIONS_DATA_SAVE_MANUAL_EXECUTIONS=true
+      - N8N_WORKFLOW_TIMEOUT=21600
     ports:
       - "8443:5678"
     volumes:
