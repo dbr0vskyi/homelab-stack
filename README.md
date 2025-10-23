@@ -40,7 +40,7 @@ nano .env  # Add your tokens
 
 ```bash
 ./scripts/manage.sh status    # Check services
-./scripts/manage.sh logs      # View logs  
+./scripts/manage.sh logs      # View logs
 ./scripts/backup.sh          # Create backup
 ./scripts/setup.sh funnel    # Enable external webhooks
 ```
@@ -49,22 +49,47 @@ Run any script without arguments to see all options.
 
 ## 🔧 Hardware Recommendations
 
-| Device | RAM | Models | Performance |
-|--------|-----|--------|-------------|
-| **Pi 5 4GB** | 4GB | `llama3.2:1b` | Basic automation |
-| **Pi 5 8GB** | 8GB | `llama3.1:8b` | Good performance |
-| **Pi 5 16GB** | 16GB | `qwen2.5:14b` | High performance |
-| **Apple Silicon** | 8GB+ | Any models | Excellent |
+| Device            | RAM  | Models        | Performance      |
+| ----------------- | ---- | ------------- | ---------------- |
+| **Pi 5 4GB**      | 4GB  | `llama3.2:1b` | Basic automation |
+| **Pi 5 8GB**      | 8GB  | `llama3.1:8b` | Good performance |
+| **Pi 5 16GB**     | 16GB | `qwen2.5:14b` | High performance |
+| **Apple Silicon** | 8GB+ | Any models    | Excellent        |
 
 ## 📚 Documentation
 
 - [🚀 **Setup Guide**](docs/setup-guide.md) - Complete installation walkthrough
-- [🌐 **Tailscale Setup**](docs/tailscale-setup.md) - SSL certificates and external access  
+- [🌐 **Tailscale Setup**](docs/tailscale-setup.md) - SSL certificates and external access
 - [🔗 **API Configuration**](docs/api-setup.md) - Telegram, Notion, Gmail setup
 - [⚡ **Workflow Management**](docs/workflows.md) - Import/export and examples
 - [🖥️ **Hardware Optimization**](docs/hardware-setup.md) - Platform-specific tuning
 
-## 🚨 Troubleshooting
+## � Long-Running LLM Calls
+
+This stack includes a timeout patch to enable AI Agent nodes with long-running LLM calls (>5 minutes). The default Node.js and undici timeouts are too restrictive for complex AI processing.
+
+**Solution Applied**: [n8n-timeout-patch](https://github.com/Piggeldi2013/n8n-timeout-patch) by [@Piggeldi2013](https://github.com/Piggeldi2013)
+
+**How it works**:
+
+- Patches Node.js HTTP server timeouts (inbound requests)
+- Configures undici global dispatcher (outbound API calls to LLMs)
+- Preloaded via `NODE_OPTIONS=--require /patch/patch-http-timeouts.js`
+
+**Timeout Configuration**:
+
+- **Workflow execution**: 6 hours (`N8N_WORKFLOW_TIMEOUT=21600`)
+- **LLM headers response**: 30 minutes (`FETCH_HEADERS_TIMEOUT=1800000`)
+- **LLM body streaming**: 3.33 hours (`FETCH_BODY_TIMEOUT=12000000`)
+
+**Files**:
+
+- `config/n8n/patch-http-timeouts.js` - Timeout patch script
+- Environment variables in `docker-compose.yml` - Timeout configuration
+
+**Verification**: Check logs for `[patch] undici dispatcher set` and `[patch] http server timeouts` messages.
+
+## �🚨 Troubleshooting
 
 ```bash
 ./scripts/manage.sh diagnose    # Full system check

@@ -51,11 +51,21 @@ services:
       - EXECUTIONS_TIMEOUT=21600
       - EXECUTIONS_TIMEOUT_MAX=21600
       - N8N_EXECUTION_TIMEOUT=21600
+      # Patch n8n/Node/undici timeouts for long-running LLM calls
+      - NODE_OPTIONS=--require /patch/patch-http-timeouts.js
+      - N8N_HTTP_REQUEST_TIMEOUT=0
+      - N8N_HTTP_HEADERS_TIMEOUT=120000
+      - N8N_HTTP_KEEPALIVE_TIMEOUT=65000
+      - FETCH_HEADERS_TIMEOUT=1800000
+      - FETCH_BODY_TIMEOUT=12000000
+      - FETCH_CONNECT_TIMEOUT=600000
+      - FETCH_KEEPALIVE_TIMEOUT=65000
     ports:
       - "8443:5678"
     volumes:
       - n8n_data:/home/node/.n8n
       - ./workflows:/home/node/.n8n/workflows
+      - ./config/n8n/patch-http-timeouts.js:/patch/patch-http-timeouts.js:ro
     networks:
       - homelab
     depends_on:
@@ -91,7 +101,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 12G  # Allow up to 12GB for Ollama on 16GB Pi
+          memory: 14G  # Allow up to 12GB for Ollama on 16GB Pi
         reservations:
           memory: 4G   # Reserve 4GB minimum
     # Uncomment for NVIDIA GPU support
