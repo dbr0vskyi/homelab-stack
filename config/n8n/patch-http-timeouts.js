@@ -52,6 +52,45 @@
   patchServer("http");
   patchServer("https");
 
+  // Patch axios if available (used by LangChain components)
+  try {
+    const axios = require('axios');
+    if (axios && axios.defaults) {
+      axios.defaults.timeout = toNum(process.env.FETCH_BODY_TIMEOUT, 12000000);
+      console.log(`[patch] axios timeout set to ${axios.defaults.timeout}ms`);
+    }
+  } catch (e) {
+    console.log('[patch] axios not available, skipping');
+  }
+
+  // Patch global fetch timeout (for LangChain Ollama nodes)
+  if (typeof globalThis.fetch !== 'undefined') {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = function (url, options = {}) {
+      // Disable or extend signal timeout for Ollama requests
+      if (url && typeof url === 'string' && url.includes('ollama')) {
+        console.log('[patch] Extending timeout for Ollama fetch request');
+        // Remove any existing timeout signal
+        delete options.signal;
+
+        // Create a new AbortSignal with extended timeout
+        const controller = new AbortController();
+        const timeoutId = setTimeout(
+          () => controller.abort(),
+          toNum(process.env.FETCH_BODY_TIMEOUT, 12000000)
+        );
+
+        options.signal = controller.signal;
+
+        return originalFetch.call(this, url, options).finally(() => {
+          clearTimeout(timeoutId);
+        });
+      }
+      return originalFetch.call(this, url, options);
+    };
+    console.log('[patch] Global fetch patched for Ollama requests');
+  }
+
   // Outbound: undici (Node fetch) timeouts (affects n8n -> LLM/API)
   // If your model/API takes >headers timeout to send first byte, default undici will throw "Headers Timeout Error".
   try {

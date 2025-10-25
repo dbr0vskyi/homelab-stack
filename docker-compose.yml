@@ -60,6 +60,9 @@ services:
       - FETCH_BODY_TIMEOUT=12000000
       - FETCH_CONNECT_TIMEOUT=600000
       - FETCH_KEEPALIVE_TIMEOUT=65000
+      # Ollama-specific timeout overrides for LangChain nodes
+      - OLLAMA_REQUEST_TIMEOUT=12000000
+      - OLLAMA_KEEP_ALIVE=-1
     ports:
       - "8443:5678"
     volumes:
