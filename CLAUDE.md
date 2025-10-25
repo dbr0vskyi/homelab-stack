@@ -20,19 +20,22 @@ All services are networked via a bridge network (`homelab_network`) and use exte
 
 ### Critical Timeout Configuration
 
-The stack includes a **custom timeout patch** (`config/n8n/patch-http-timeouts.js`) to enable long-running LLM calls (>5 minutes). This is essential for AI Agent nodes and complex LLM workflows.
+The stack includes a **custom timeout patch** (`config/n8n/patch-http-timeouts.js`) to enable long-running LLM calls. This is essential for AI Agent nodes and complex workflows.
 
-**How it works:**
-- Patches Node.js HTTP server timeouts (inbound requests from browser → n8n)
-- Configures undici global dispatcher (outbound API calls: n8n → LLMs)
-- Preloaded via `NODE_OPTIONS=--require /patch/patch-http-timeouts.js` in docker-compose.yml
+**What it patches:**
+- Node.js HTTP server (browser → n8n requests)
+- Axios library (used by LangChain components)
+- Global fetch (extends timeout for Ollama URLs)
+- Undici dispatcher (n8n → LLM API calls)
 
-**Timeout values (in docker-compose.yml):**
+**Key timeout values (in docker-compose.yml):**
 - Workflow execution: 6 hours (`N8N_WORKFLOW_TIMEOUT=21600`)
-- LLM headers response: 30 minutes (`FETCH_HEADERS_TIMEOUT=1800000`)
-- LLM body streaming: 3.33 hours (`FETCH_BODY_TIMEOUT=12000000`)
+- Inbound request: disabled (`N8N_HTTP_REQUEST_TIMEOUT=0`)
+- Outbound connect: 10 min (`FETCH_CONNECT_TIMEOUT=600000`)
+- Outbound headers: 30 min (`FETCH_HEADERS_TIMEOUT=1800000`)
+- Outbound body/stream: 3.3 hours (`FETCH_BODY_TIMEOUT=12000000`)
 
-When modifying timeout behavior, always edit both the patch script and the environment variables in docker-compose.yml.
+The patch is preloaded via `NODE_OPTIONS=--require /patch/patch-http-timeouts.js`. When modifying timeout behavior, edit environment variables in docker-compose.yml.
 
 ### Modular Script Architecture
 
@@ -184,9 +187,9 @@ See `.env.example` for complete list.
 - Check available RAM: `./scripts/manage.sh diagnose system`
 
 ### Long-Running LLM Timeouts
-- Verify patch is loaded: check for `[patch] undici dispatcher set` in logs
+- Verify patch loaded: check n8n logs for `[patch]` messages (HTTP server, axios, global fetch, undici)
 - Increase timeout values in docker-compose.yml environment variables
-- Modify `config/n8n/patch-http-timeouts.js` if needed
+- For Ollama-specific issues, check `FETCH_BODY_TIMEOUT` and `OLLAMA_REQUEST_TIMEOUT`
 
 ### Workflow Import/Export Failures
 - Ensure n8n is running: `./scripts/manage.sh status`
