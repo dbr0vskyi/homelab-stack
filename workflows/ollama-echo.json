@@ -3,17 +3,12 @@
   "nodes": [
     {
       "parameters": {
-        "updates": [
-          "message"
-        ],
+        "updates": ["message"],
         "additionalFields": {}
       },
       "type": "n8n-nodes-base.telegramTrigger",
       "typeVersion": 1.2,
-      "position": [
-        -176,
-        0
-      ],
+      "position": [-176, 0],
       "id": "ff1571a8-70ab-4946-ba3a-876b0144d71e",
       "name": "Telegram Trigger",
       "webhookId": "1538a756-cd51-4bb0-9617-fbade5d40849",
@@ -62,10 +57,7 @@
       "name": "Summarise Email with LLM",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [
-        416,
-        0
-      ]
+      "position": [416, 0]
     },
     {
       "parameters": {
@@ -77,10 +69,7 @@
       },
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
-      "position": [
-        592,
-        0
-      ],
+      "position": [592, 0],
       "id": "8c2d2433-d49a-4a42-8258-727f3d95fde7",
       "name": "Send a text message",
       "webhookId": "c97117ed-01c0-4316-b928-f381986e03ba",
@@ -127,27 +116,21 @@
       },
       "type": "n8n-nodes-base.filter",
       "typeVersion": 2.2,
-      "position": [
-        32,
-        0
-      ],
+      "position": [32, 0],
       "id": "6c740057-6b2f-443f-8995-a16fdb099055",
       "name": "Filter"
     },
     {
       "parameters": {
         "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
-        "text": "=Starting processing message \"{{ $json.message.text }}\" (raw)...",
+        "text": "=Starting processing message \"{{ $json.message.text.slice(0, 20) }}...\" (raw)",
         "additionalFields": {
           "appendAttribution": false
         }
       },
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
-      "position": [
-        224,
-        0
-      ],
+      "position": [224, 0],
       "id": "107b2bd4-2b56-4a60-acbd-e980489745be",
       "name": "Send a text message1",
       "webhookId": "c97117ed-01c0-4316-b928-f381986e03ba",
@@ -184,9 +167,7 @@
       ]
     },
     "Send a text message": {
-      "main": [
-        []
-      ]
+      "main": [[]]
     },
     "Filter": {
       "main": [
@@ -215,7 +196,7 @@
   "settings": {
     "executionOrder": "v1"
   },
-  "versionId": "22d4a79d-c32e-445e-89ce-8eeb7aca77d1",
+  "versionId": "61d865bd-81ad-4bac-b1ca-4e720ee4e914",
   "meta": {
     "templateCredsSetupCompleted": true,
     "instanceId": "f6850b7a742915e4beea1da1d7e81ab301286f32549db44a9ced290422cc1c31"
