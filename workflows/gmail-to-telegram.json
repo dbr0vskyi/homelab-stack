@@ -210,7 +210,7 @@
             },
             {
               "name": "prompt",
-              "value": "=Summarize the following email according to the system instructions above.\n\nTo: {{ $json.to }}\nFrom: {{ $json.fromAddress }} | {{ $json.fromName }}\nSubject: {{ $json.subject }}\nGmail URL: {{ $json.gmailUrl }}\nReceived: {{ $json.internalDate }}\n\nText:\n{{ $json.text }}"
+              "value": "=Summarize the following email according to the system instructions.\n\nTo: {{ $json.to }}\nFrom: {{ $json.fromAddress }} | {{ $json.fromName }}\nSubject: {{ $json.subject }}\nGmail URL: {{ $json.gmailUrl }}\nReceived: {{ $json.internalDate }}\n\nText:\n{{ $json.text }}"
             },
             {
               "name": "stream",
@@ -218,7 +218,7 @@
             },
             {
               "name": "system",
-              "value": "You are a JSON-only function that summarizes a single email.\n\nOutput **one minified JSON object** that strictly matches this schema:\n\n{\n  \"subject\": \"string|null\",\n  \"from\": \"string|null\",\n  \"isImportant\": true,\n  \"summary\": \"string|null\",\n  \"category\": \"string|null\",\n  \"actions\": [\n    {\"label\": \"string\", \"url\": \"string\"}  // url must start with http\n  ],\n  \"gmailUrl\": \"string|null\",\n  \"receivedDate\": \"string|null\"           // ISO8601, e.g. 2025-10-20T19:30:48Z\n}\n\n### Rules\n- Output **only** a single valid JSON object (no markdown, no code fences, no explanations).\n- Use `null` when data is unknown.\n- `isImportant` must be a boolean (true/false).\n- Keep summaries concise (≤ 3 sentences).\n- Categorize briefly (e.g. \"Newsletter\", \"Account Notification\", \"Promotional\", \"Work\").\n- Collect up to 3 useful links into `\"actions\"` with both `\"label\"` and `\"url\"`.\n- Ignore tracking/marketing garbage.\n- Never fabricate or hallucinate content.\n- Return the JSON **in one line**."
+              "value": "You are an email analysis agent. Your goal is to analyze an email and produce a structured JSON object describing its key attributes.\n\nFollow these rules strictly:\n1. Summarize the email concisely in plain language (no speculation).\n2. Extract up to 5 actionable items — each must be either:\n  - a short descriptive label with a valid URL starting with http or https, or\n  - plain text if no URL is present.\n3. Determine whether the email is important (true / false).\n4. Assign one category from this fixed list or create a new one:\n\nwork, meeting, personal, finance, travel, delivery,\nnotification, promotion, event, education, support, unknown\n\n\n5. If any field cannot be determined, return \"unknown\" or null.\n6. Do not invent or hallucinate any data.\n7. Output only valid JSON, following exactly the schema below — no extra text or commentary.\n\nExpected JSON format:\n{\n  \"subject\": \"string|null\",\n  \"from\": \"string|null\",\n  \"isImportant\": true,\n  \"summary\": \"string|null\",\n  \"category\": \"string|null\",\n  \"actions\": [\n    {\"label\": \"string\", \"url\": \"string\"}   // or a simple string action\n  ],\n  \"gmailUrl\": \"string|null\",\n  \"receivedDate\": \"string|null\"            // ISO8601, e.g. 2025-10-20T19:30:48Z\n}\n\nExample output:\n{\n  \"subject\": \"Invoice for October\",\n  \"from\": \"Acme Billing <billing@acme.com>\",\n  \"isImportant\": true,\n  \"summary\": \"Your October invoice is ready for payment.\",\n  \"category\": \"finance\",\n  \"actions\": [\n    {\"label\": \"View Invoice\", \"url\": \"https://acme.com/invoices/123\"},\n    {\"label\": \"Pay Now\", \"url\": \"https://acme.com/pay/123\"}\n  ],\n  \"gmailUrl\": \"https://mail.google.com/mail/u/0/#inbox/ABC123\",\n  \"receivedDate\": \"2025-10-24T09:41:12Z\"\n}"
             }
           ]
         },
@@ -274,6 +274,7 @@
         "options": {
           "temperature": 0.2,
           "topP": 0.9,
+          "keepAlive": "2m",
           "numThread": 4,
           "repeatPenalty": 1.1,
           "format": "json"
@@ -281,7 +282,7 @@
       },
       "type": "@n8n/n8n-nodes-langchain.lmChatOllama",
       "typeVersion": 1,
-      "position": [1280, 768],
+      "position": [1408, 704],
       "id": "02311d68-2cbe-4026-bad8-525426237099",
       "name": "Ollama Chat Model",
       "credentials": {
@@ -411,7 +412,7 @@
     "availableInMCP": false,
     "errorWorkflow": "5YHHqqqLCxRFvISB"
   },
-  "versionId": "d60b1423-f6e2-4028-adbd-fb65737eeb5b",
+  "versionId": "4857af25-da49-44df-badf-9e6b71decb6c",
   "meta": {
     "templateCredsSetupCompleted": true,
     "instanceId": "f6850b7a742915e4beea1da1d7e81ab301286f32549db44a9ced290422cc1c31"
