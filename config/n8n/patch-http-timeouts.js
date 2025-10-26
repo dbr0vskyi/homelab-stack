@@ -67,9 +67,12 @@
   if (typeof globalThis.fetch !== 'undefined') {
     const originalFetch = globalThis.fetch;
     globalThis.fetch = function (url, options = {}) {
-      // Disable or extend signal timeout for Ollama requests
-      if (url && typeof url === 'string' && url.includes('ollama')) {
-        console.log('[patch] Extending timeout for Ollama fetch request');
+      // Detect Ollama requests by port 11434 OR hostname containing 'ollama'
+      const isOllamaRequest = url && typeof url === 'string' &&
+        (url.includes('ollama') || url.includes(':11434'));
+
+      if (isOllamaRequest) {
+        console.log('[patch] Extending timeout for Ollama fetch request:', url);
         // Remove any existing timeout signal
         delete options.signal;
 
