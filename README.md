@@ -39,10 +39,11 @@ nano .env  # Add your tokens
 ## 📋 Management
 
 ```bash
-./scripts/manage.sh status    # Check services
-./scripts/manage.sh logs      # View logs
-./scripts/backup.sh          # Create backup
-./scripts/setup.sh funnel    # Enable external webhooks
+./scripts/manage.sh status       # Check services
+./scripts/manage.sh logs         # View logs
+./scripts/manage.sh exec-latest  # Show workflow executions
+./scripts/backup.sh             # Create backup
+./scripts/setup.sh funnel       # Enable external webhooks
 ```
 
 Run any script without arguments to see all options.

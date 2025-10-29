@@ -143,6 +143,11 @@ curl -X POST "https://api.telegram.org/bot${BOT_TOKEN}/setWebhook" \
 ./scripts/manage.sh status
 ./scripts/manage.sh logs
 
+# Monitor workflow executions
+./scripts/manage.sh exec-latest    # Latest execution
+./scripts/manage.sh exec-history   # Recent executions
+./scripts/manage.sh exec-failed    # Failed executions
+
 # Backup and restore
 ./scripts/backup.sh
 ./scripts/restore.sh <backup-file>
@@ -181,8 +186,9 @@ tailscale status
 ## 🎯 Next Steps
 
 1. **Test Workflows**: Send a message to your Telegram bot
-2. **Monitor Performance**: Check system resources and logs
-3. **Set Up Backups**: Schedule regular backups
-4. **Security Review**: Enable authentication and monitor access
+2. **Monitor Executions**: Use `./scripts/manage.sh exec-latest` to track workflows
+3. **Check Performance**: Review system resources and execution times
+4. **Set Up Backups**: Schedule regular backups
+5. **Security Review**: Enable authentication and monitor access
 
 For advanced topics, see specialized documentation files.

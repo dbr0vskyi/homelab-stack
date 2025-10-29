@@ -49,7 +49,8 @@ The setup and management scripts use a modular library system located in `script
 - `ssl.sh`: Self-signed certificate generation
 - `services.sh`: Docker volume initialization and service startup
 - `ollama.sh`: Model downloads and management
-- `workflows.sh`: n8n workflow import/export via API
+- `workflows.sh`: n8n workflow import/export via CLI
+- `executions.sh`: Query workflow execution history from PostgreSQL
 - `tailscale.sh`: Funnel setup for external webhooks
 - `backup.sh`: Full system backup/restore operations
 - `display.sh`: Setup completion information display
@@ -100,7 +101,19 @@ When modifying functionality, identify which library module contains the relevan
 ./scripts/manage.sh test-workflows     # Test workflow sync and credentials
 ```
 
-Workflows are stored in `workflows/*.json` and can be imported/exported using the n8n API. The workflow management functions require n8n to be running and use credentials from `.env`.
+Workflows are stored in `workflows/*.json` and can be imported/exported using the n8n CLI. The workflow management functions require n8n to be running.
+
+### Execution Logs
+```bash
+./scripts/manage.sh exec-latest                     # Show latest execution
+./scripts/manage.sh exec-history 20                 # Show last N executions
+./scripts/manage.sh exec-details 191                # Show execution details by ID
+./scripts/manage.sh exec-stats                      # Show execution statistics
+./scripts/manage.sh exec-workflow gmail-to-telegram # Show workflow-specific executions
+./scripts/manage.sh exec-failed 10                  # Show failed executions
+```
+
+Query workflow execution history directly from PostgreSQL. Useful for monitoring performance, debugging failures, and analyzing workflow runs without manual database access.
 
 ### Backup & Restore
 ```bash

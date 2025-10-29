@@ -8,15 +8,19 @@ This document tracks planned improvements, fixes, and enhancements for the homel
 
 #### 1. Lightweight Monitoring & Logging
 
-**Status:** Planning  
-**Priority:** High  
+**Status:** In Progress
+**Priority:** High
 **Estimated Effort:** 2-3 days
 
-**Description:**  
+**Description:**
 Implement a lightweight monitoring and logging stack optimized for Raspberry Pi 5 with LLM workloads.
+
+**Progress:**
+- [x] Basic execution log queries (PostgreSQL-based via `exec-*` commands)
 
 **Requirements:**
 
+- [x] Query workflow execution history from database
 - [ ] Monitor system metrics (temperature, CPU throttling, RAM, disk space)
 - [ ] Collect Docker container/service metrics
 - [ ] Centralize logs with minimal disk I/O

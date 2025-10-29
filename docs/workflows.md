@@ -16,6 +16,11 @@
 
 # Run diagnostics
 ./scripts/manage.sh test-workflows
+
+# Monitor execution history
+./scripts/manage.sh exec-latest    # Latest execution
+./scripts/manage.sh exec-history   # Recent executions
+./scripts/manage.sh exec-failed    # Show failures
 ```
 
 ## Workflows
