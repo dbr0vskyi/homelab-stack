@@ -4,7 +4,7 @@
     {
       "parameters": {
         "operation": "getAll",
-        "limit": 20,
+        "limit": 1,
         "simple": false,
         "filters": {
           "readStatus": "unread",
@@ -219,6 +219,10 @@
             {
               "name": "system",
               "value": "You are an email analysis agent. Your goal is to analyze an email and produce a structured JSON object describing its key attributes.\n\nFollow these rules strictly:\n1. Summarize the email concisely in plain language (no speculation).\n2. Extract up to 5 actionable items — each must be either:\n  - a short descriptive label with a valid URL starting with http or https, or\n  - plain text if no URL is present.\n3. Determine whether the email is important (true / false).\n4. Assign one category from this fixed list or create a new one:\n\nwork, meeting, personal, finance, travel, delivery,\nnotification, promotion, event, education, support, unknown\n\n\n5. If any field cannot be determined, return \"unknown\" or null.\n6. Do not invent or hallucinate any data.\n7. CRITICAL: Output ONLY valid JSON following the exact schema below. Do NOT include any explanatory text, code blocks, backticks, or commentary before or after the JSON.\n8. Your response must start with '{' and end with '}' - nothing else.\n\nExpected JSON format:\n{\n  \"subject\": \"string|null\",\n  \"from\": \"string|null\",\n  \"isImportant\": true,\n  \"summary\": \"string|null\",\n  \"category\": \"string|null\",\n  \"actions\": [\n    {\"label\": \"string\", \"url\": \"string\"}   // or a simple string action\n  ],\n  \"gmailUrl\": \"string|null\",\n  \"receivedDate\": \"string|null\"            // ISO8601, e.g. 2025-10-20T19:30:48Z\n}\n\nExample output:\n{\n  \"subject\": \"Invoice for October\",\n  \"from\": \"Acme Billing <billing@acme.com>\",\n  \"isImportant\": true,\n  \"summary\": \"Your October invoice is ready for payment.\",\n  \"category\": \"finance\",\n  \"actions\": [\n    {\"label\": \"View Invoice\", \"url\": \"https://acme.com/invoices/123\"},\n    {\"label\": \"Pay Now\", \"url\": \"https://acme.com/pay/123\"}\n  ],\n  \"gmailUrl\": \"https://mail.google.com/mail/u/0/#inbox/ABC123\",\n  \"receivedDate\": \"2025-10-24T09:41:12Z\"\n}"
+            },
+            {
+              "name": "format",
+              "value": "json"
             }
           ]
         },
@@ -412,7 +416,7 @@
     "availableInMCP": false,
     "errorWorkflow": "5YHHqqqLCxRFvISB"
   },
-  "versionId": "04d780c0-55a0-4b6d-b85f-c2201c3500f1",
+  "versionId": "28b581e8-a4c1-4626-b5d8-8ddabc297267",
   "meta": {
     "templateCredsSetupCompleted": true,
     "instanceId": "f6850b7a742915e4beea1da1d7e81ab301286f32549db44a9ced290422cc1c31"
