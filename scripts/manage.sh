@@ -15,6 +15,7 @@ source "${LIB_DIR}/docker.sh"
 source "${LIB_DIR}/backup.sh"
 source "${LIB_DIR}/ollama.sh"
 source "${LIB_DIR}/workflows.sh"
+source "${LIB_DIR}/executions.sh"
 
 # Show help
 show_help() {
@@ -43,7 +44,15 @@ Commands:
   import-workflows           Import workflow files to n8n
   export-workflows           Export n8n workflows to files
   test-workflows             Test workflow sync and diagnose issues
-  
+
+  Execution Logs:
+  exec-latest                Show latest workflow execution
+  exec-history [limit]       Show recent execution history (default: 10)
+  exec-details <id>          Show detailed execution information
+  exec-stats                 Show execution statistics summary
+  exec-workflow <name> [limit]  Show executions for specific workflow
+  exec-failed [limit]        Show failed executions
+
   Diagnostic Tools:
   diagnose                   Universal environment diagnostic tool
   diagnose [mode]            Specific diagnostic mode (system/database/n8n/etc)
@@ -57,6 +66,10 @@ Examples:
   $0 import-workflows                # Import workflow files to n8n
   $0 export-workflows                # Export n8n workflows to files
   $0 test-workflows                  # Test workflow sync credentials
+  $0 exec-latest                     # Show latest workflow execution
+  $0 exec-history 20                 # Show last 20 executions
+  $0 exec-details 191                # Show details for execution ID 191
+  $0 exec-workflow gmail-to-telegram # Show executions for specific workflow
   $0 diagnose                        # Full system diagnostic
   $0 diagnose database               # Database analysis only
   $0 diagnose summary                # Quick system summary
@@ -257,6 +270,24 @@ case "${1:-}" in
         ;;
     "test-workflows")
         test_workflows_command
+        ;;
+    "exec-latest")
+        get_latest_execution
+        ;;
+    "exec-history")
+        get_execution_history "$2"
+        ;;
+    "exec-details")
+        get_execution_details "$2"
+        ;;
+    "exec-stats")
+        get_execution_stats
+        ;;
+    "exec-workflow")
+        get_executions_by_workflow "$2" "$3"
+        ;;
+    "exec-failed")
+        get_failed_executions "$2"
         ;;
     "diagnose")
         diagnose_command "$2"
