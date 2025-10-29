@@ -4,7 +4,7 @@
     {
       "parameters": {
         "operation": "getAll",
-        "limit": 1,
+        "limit": 20,
         "simple": false,
         "filters": {
           "readStatus": "unread",
@@ -416,7 +416,7 @@
     "availableInMCP": false,
     "errorWorkflow": "5YHHqqqLCxRFvISB"
   },
-  "versionId": "28b581e8-a4c1-4626-b5d8-8ddabc297267",
+  "versionId": "2e9c2f77-3d03-49a3-956a-2767d4e39f1f",
   "meta": {
     "templateCredsSetupCompleted": true,
     "instanceId": "f6850b7a742915e4beea1da1d7e81ab301286f32549db44a9ced290422cc1c31"
