@@ -142,6 +142,68 @@ Advanced execution data analysis for investigating workflow failures, debugging 
 - Debug complex workflow execution issues
 - Generate reports on execution quality
 
+### Workflow Investigation System
+
+The project includes specialized Claude Code slash commands for comprehensive workflow analysis:
+
+**Available commands:**
+
+```bash
+/investigate <execution_id>        # Full forensic investigation with detailed report
+/diagnose-workflow [execution_id]  # Quick diagnostic triage (no report)
+```
+
+**Investigation features:**
+- **Comprehensive analysis**: Performance, data quality, model verification, root cause identification
+- **Automated reporting**: Generates markdown reports saved to `docs/investigations/`
+- **Actionable recommendations**: Prioritized fixes with code examples and impact estimates
+- **Model verification**: Automatically detects model mismatches and UI changes
+- **Interactive questioning**: Asks clarifying questions when needed
+
+**When to use:**
+
+Use `/investigate` for:
+- Workflow failures or unexpected behavior
+- Performance degradation (execution took unusually long)
+- Data quality issues (parsing failures, empty outputs)
+- Need documented analysis for future reference
+- Before/after optimization to establish baselines
+
+Use `/diagnose-workflow` for:
+- Quick health check of latest execution
+- Fast triage without full report
+- Determining if detailed investigation is needed
+
+**Investigation reports include:**
+- Executive summary with key findings
+- Detailed performance and data quality analysis
+- Model performance assessment
+- Root cause identification
+- Prioritized recommendations (immediate/short-term/long-term)
+- Specific code examples and implementation steps
+- Testing recommendations and expected impact
+
+**Example workflow:**
+```bash
+# Check latest execution quickly
+/diagnose-workflow
+
+# If issues found, run full investigation
+/investigate 194
+
+# Review generated report
+cat docs/investigations/2025-10-30-workflow-194-*.md
+
+# Implement recommended fixes
+# Test with new execution
+# Monitor improvement
+```
+
+See `docs/investigation-system.md` for complete documentation and examples.
+
+**Existing investigation reports:**
+- `docs/investigations/2025-10-29-workflow-191-llm-parsing-failures.md` - LLM JSON parsing issues
+
 ### Backup & Restore
 ```bash
 ./scripts/backup.sh                    # Create full backup
