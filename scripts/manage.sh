@@ -52,6 +52,9 @@ Commands:
   exec-stats                 Show execution statistics summary
   exec-workflow <name> [limit]  Show executions for specific workflow
   exec-failed [limit]        Show failed executions
+  exec-data <id> [file]      Extract raw execution data (optionally save to file)
+  exec-parse <id> [options]  Parse execution data and extract node outputs
+  exec-llm <id>              Analyze LLM responses with JSON validation
 
   Diagnostic Tools:
   diagnose                   Universal environment diagnostic tool
@@ -70,6 +73,9 @@ Examples:
   $0 exec-history 20                 # Show last 20 executions
   $0 exec-details 191                # Show details for execution ID 191
   $0 exec-workflow gmail-to-telegram # Show executions for specific workflow
+  $0 exec-data 191 exec-191.json     # Extract raw execution data to file
+  $0 exec-parse 191 --llm-only       # Parse and extract LLM responses
+  $0 exec-llm 191                    # Analyze LLM responses with validation
   $0 diagnose                        # Full system diagnostic
   $0 diagnose database               # Database analysis only
   $0 diagnose summary                # Quick system summary
@@ -288,6 +294,19 @@ case "${1:-}" in
         ;;
     "exec-failed")
         get_failed_executions "$2"
+        ;;
+    "exec-data")
+        get_execution_data "$2" "$3"
+        ;;
+    "exec-parse")
+        # Pass execution ID and all remaining arguments to parser
+        shift  # Remove command name
+        exec_id="$1"
+        shift  # Remove execution ID
+        parse_execution_data "$exec_id" "$@"
+        ;;
+    "exec-llm")
+        analyze_llm_responses "$2"
         ;;
     "diagnose")
         diagnose_command "$2"

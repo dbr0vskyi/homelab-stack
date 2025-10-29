@@ -51,6 +51,7 @@ The setup and management scripts use a modular library system located in `script
 - `ollama.sh`: Model downloads and management
 - `workflows.sh`: n8n workflow import/export via CLI
 - `executions.sh`: Query workflow execution history from PostgreSQL
+- `parse-execution-data.py`: Python parser for n8n execution data (handles compressed JSON format)
 - `tailscale.sh`: Funnel setup for external webhooks
 - `backup.sh`: Full system backup/restore operations
 - `display.sh`: Setup completion information display
@@ -114,6 +115,32 @@ Workflows are stored in `workflows/*.json` and can be imported/exported using th
 ```
 
 Query workflow execution history directly from PostgreSQL. Useful for monitoring performance, debugging failures, and analyzing workflow runs without manual database access.
+
+### Execution Data Analysis
+```bash
+# Extract raw execution data
+./scripts/manage.sh exec-data 191                   # Output to stdout
+./scripts/manage.sh exec-data 191 exec-191.json     # Save to file
+
+# Parse execution data and extract node outputs
+./scripts/manage.sh exec-parse 191                  # Parse all nodes
+./scripts/manage.sh exec-parse 191 --node "Format for Telegram"  # Specific node
+./scripts/manage.sh exec-parse 191 --llm-only       # Extract only LLM responses
+./scripts/manage.sh exec-parse 191 --llm-only --validate-json   # With JSON validation
+./scripts/manage.sh exec-parse 191 --output results.json        # Save to file
+
+# Analyze LLM responses with automatic JSON validation
+./scripts/manage.sh exec-llm 191                    # Full analysis with statistics
+```
+
+Advanced execution data analysis for investigating workflow failures, debugging LLM parsing issues, and extracting detailed node outputs. The parser handles n8n's compressed JSON reference format automatically.
+
+**Use cases:**
+- Investigate LLM parsing failures (e.g., workflow 191 investigation)
+- Extract specific node outputs for analysis
+- Validate JSON responses from AI nodes
+- Debug complex workflow execution issues
+- Generate reports on execution quality
 
 ### Backup & Restore
 ```bash
