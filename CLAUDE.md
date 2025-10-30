@@ -306,7 +306,9 @@ See `.env.example` for complete list.
 ## Platform-Specific Notes
 
 ### Raspberry Pi 5
-- Recommended models: `llama3.2:1b` (4GB), `llama3.1:8b` (8GB), `qwen2.5:14b` (16GB)
+- **This project uses a Raspberry Pi 5 with 16GB RAM**
+- Recommended models: `llama3.2:1b` (4GB), `llama3.1:8b` (8GB), `qwen2.5:14b` (16GB), `qwen2.5:32b` (20GB)
+- With 16GB RAM, you can run larger models like qwen2.5:14b comfortably
 - Memory limits are critical - adjust docker-compose.yml based on available RAM
 - Use `OLLAMA_NUM_PARALLEL=1` and `OLLAMA_MAX_LOADED_MODELS=1` to prevent OOM
 
