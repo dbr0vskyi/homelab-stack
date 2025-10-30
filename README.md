@@ -50,11 +50,13 @@ Run any script without arguments to see all options.
 
 ## 🔧 Hardware Recommendations
 
+**This project uses a Raspberry Pi 5 with 16GB RAM** - ideal for running larger models like qwen2.5:14b.
+
 | Device            | RAM  | Models        | Performance      |
 | ----------------- | ---- | ------------- | ---------------- |
 | **Pi 5 4GB**      | 4GB  | `llama3.2:1b` | Basic automation |
 | **Pi 5 8GB**      | 8GB  | `llama3.1:8b` | Good performance |
-| **Pi 5 16GB**     | 16GB | `qwen2.5:14b` | High performance |
+| **Pi 5 16GB** ⭐   | 16GB | `qwen2.5:14b` to `qwen2.5:32b` | High performance (current setup) |
 | **Apple Silicon** | 8GB+ | Any models    | Excellent        |
 
 ## 📚 Documentation

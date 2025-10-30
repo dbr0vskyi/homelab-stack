@@ -2,6 +2,8 @@
 
 ## 🖥️ Raspberry Pi 5 Setup
 
+**⭐ This project uses: Raspberry Pi 5 with 16GB RAM** - the optimal configuration for running larger LLM models.
+
 ### Hardware Requirements
 
 **Minimum (4GB RAM):**
@@ -9,15 +11,16 @@
 - Official power supply + cooling
 - Use small models: `llama3.2:1b,qwen2.5:1.5b`
 
-**Recommended (8GB RAM):**
-- Raspberry Pi 5 8GB + 128GB SD card  
+**Good (8GB RAM):**
+- Raspberry Pi 5 8GB + 128GB SD card
 - Active cooler + Ethernet connection
 - Use medium models: `llama3.1:8b,qwen2.5:7b`
 
-**Optimal (16GB RAM):**
+**Optimal (16GB RAM) ⭐ Current Setup:**
 - Raspberry Pi 5 16GB + 256GB NVMe SSD
 - M.2 HAT or USB 3.0 SSD adapter
-- Use large models: `qwen2.5:14b,codellama:13b`
+- Use large models: `qwen2.5:14b,qwen2.5:32b,codellama:13b`
+- Can run multiple models simultaneously
 
 ### OS Installation
 

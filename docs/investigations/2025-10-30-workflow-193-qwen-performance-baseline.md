@@ -87,8 +87,9 @@ Execution 194 (llama3.1:8b):  ████████████████�
 - 255s inference time is reasonable for a 7b model on Raspberry Pi 5
 - No bottlenecks detected in email fetching or data transformation
 
-**Platform Context (Raspberry Pi 5):**
-- Model loaded in memory: 4.7 GB / 8 GB available (59% utilization)
+**Platform Context (Raspberry Pi 5 with 16GB RAM):**
+- Model loaded in memory: 4.7 GB / 16 GB available (29% utilization)
+- Plenty of headroom for larger models or multiple models
 - Thermal status: Likely within normal range (no throttling observed)
 - Inference speed: ~1.9 tokens/second (estimated from response length)
 
@@ -171,7 +172,7 @@ Both executions produced valid JSON, but 193 shows better efficiency:
 4. **Efficiency**:
    - 7b size offers optimal speed/quality ratio
    - 255s inference time is acceptable for single email
-   - Memory footprint (4.7 GB) fits comfortably on 8GB Pi 5
+   - Memory footprint (4.7 GB) fits comfortably on 16GB Pi 5 with plenty of headroom
 
 **Model Comparison Analysis:**
 
@@ -180,7 +181,8 @@ Both executions produced valid JSON, but 193 shows better efficiency:
 | llama3.2:3b     | 2.0GB | Slow       | Good    | Limited      | Simple English emails        |
 | qwen2.5:7b      | 4.7GB | **Fast**   | **Excellent** | ✅ Strong | **Email analysis (current)** |
 | llama3.1:8b     | 4.9GB | Very Slow  | Good    | Moderate     | Complex reasoning tasks      |
-| qwen2.5:14b     | 9.0GB | Medium     | Excellent | ✅ Strong | High-quality analysis (if memory available) |
+| qwen2.5:14b     | 9.0GB | Medium     | Excellent | ✅ Strong | High-quality analysis (plenty of RAM) |
+| qwen2.5:32b     | 20GB  | Slower     | Outstanding | ✅ Excellent | Maximum quality (viable with 16GB Pi) |
 
 **Recommendation**: **qwen2.5:7b is the optimal model** for this workflow on Raspberry Pi 5.
 
@@ -333,7 +335,8 @@ Add to `docs/workflows/gmail-to-telegram.md` (create if needed):
 
 **Alternative Models**:
 - **llama3.2:3b**: Use if memory constrained (<6GB available)
-- **qwen2.5:14b**: Use if need highest quality and have >12GB RAM
+- **qwen2.5:14b**: Use for highest quality (9GB, easily fits 16GB Pi)
+- **qwen2.5:32b**: Use for maximum quality when needed (20GB, viable with 16GB Pi + swap)
 - **qwen2.5:1.5b**: Use for very simple English-only emails
 ```
 
@@ -637,7 +640,7 @@ grep -A 10 '"name": "model"' workflows/gmail-to-telegram.json
 | JSON Parsing Success      | 100% (1/1)      | ✅ Perfect |
 | Model Used                | qwen2.5:7b      | ✅ Optimal |
 | Model Size                | 4.7 GB          | ✅ Fits Pi |
-| Memory Utilization        | ~59% (4.7/8 GB) | ✅ Safe    |
+| Memory Utilization        | ~29% (4.7/16 GB) | ✅ Excellent headroom |
 | Multilingual Support      | ✅ Polish       | ✅         |
 | Response Quality          | Excellent       | ✅         |
 | Configuration Status      | ⚠️ Needs update | Action required |
@@ -684,7 +687,7 @@ WHERE e.id IN (192, 193, 194);
 ### Platform Information
 
 **Hardware**: Raspberry Pi 5
-**RAM**: 8 GB
+**RAM**: 16 GB
 **OS**: Linux 6.12.47+rpt-rpi-2712
 **Docker**: Compose with custom timeout patch
 **Ollama Version**: Latest (ARM64 optimized)

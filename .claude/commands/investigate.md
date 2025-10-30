@@ -280,7 +280,7 @@ Your investigation report should be:
 
 ## Special Considerations for This Stack
 
-1. **Raspberry Pi 5 constraints**: Consider memory limits (8GB), CPU thermal throttling
+1. **Raspberry Pi 5 configuration**: This project uses a Pi 5 with **16GB RAM** - ideal for larger models like qwen2.5:14b. Consider thermal throttling and CPU constraints.
 2. **Local LLM stack**: Ollama-specific optimizations, model selection
 3. **Timeout patch**: Custom HTTP timeout configuration in docker-compose.yml
 4. **Workflow types**: Email processing, task automation, LLM-powered workflows
