@@ -190,54 +190,6 @@
     },
     {
       "parameters": {
-        "method": "POST",
-        "url": "http://ollama:11434/api/generate",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Content-Type",
-              "value": "application/json"
-            }
-          ]
-        },
-        "sendBody": true,
-        "bodyParameters": {
-          "parameters": [
-            {
-              "name": "model",
-              "value": "llama3.2:3b"
-            },
-            {
-              "name": "prompt",
-              "value": "=Summarize the following email according to the system instructions.\n\nTo: {{ $json.to }}\nFrom: {{ $json.fromAddress }} | {{ $json.fromName }}\nSubject: {{ $json.subject }}\nGmail URL: {{ $json.gmailUrl }}\nReceived: {{ $json.internalDate }}\n\nText:\n{{ $json.text }}"
-            },
-            {
-              "name": "stream",
-              "value": false
-            },
-            {
-              "name": "system",
-              "value": "You are an email analysis agent. Your goal is to analyze an email and produce a structured JSON object describing its key attributes.\n\nFollow these rules strictly:\n1. Summarize the email concisely in plain language (no speculation).\n2. Extract up to 5 actionable items — each must be either:\n  - a short descriptive label with a valid URL starting with http or https, or\n  - plain text if no URL is present.\n3. Determine whether the email is important (true / false).\n4. Assign one category from this fixed list or create a new one:\n\nwork, meeting, personal, finance, travel, delivery,\nnotification, promotion, event, education, support, unknown\n\n\n5. If any field cannot be determined, return \"unknown\" or null.\n6. Do not invent or hallucinate any data.\n7. CRITICAL: Output ONLY valid JSON following the exact schema below. Do NOT include any explanatory text, code blocks, backticks, or commentary before or after the JSON.\n8. Your response must start with '{' and end with '}' - nothing else.\n\nExpected JSON format:\n{\n  \"subject\": \"string|null\",\n  \"from\": \"string|null\",\n  \"isImportant\": true,\n  \"summary\": \"string|null\",\n  \"category\": \"string|null\",\n  \"actions\": [\n    {\"label\": \"string\", \"url\": \"string\"}   // or a simple string action\n  ],\n  \"gmailUrl\": \"string|null\",\n  \"receivedDate\": \"string|null\"            // ISO8601, e.g. 2025-10-20T19:30:48Z\n}\n\nExample output:\n{\n  \"subject\": \"Invoice for October\",\n  \"from\": \"Acme Billing <billing@acme.com>\",\n  \"isImportant\": true,\n  \"summary\": \"Your October invoice is ready for payment.\",\n  \"category\": \"finance\",\n  \"actions\": [\n    {\"label\": \"View Invoice\", \"url\": \"https://acme.com/invoices/123\"},\n    {\"label\": \"Pay Now\", \"url\": \"https://acme.com/pay/123\"}\n  ],\n  \"gmailUrl\": \"https://mail.google.com/mail/u/0/#inbox/ABC123\",\n  \"receivedDate\": \"2025-10-24T09:41:12Z\"\n}"
-            },
-            {
-              "name": "format",
-              "value": "json"
-            }
-          ]
-        },
-        "options": {
-          "timeout": 3600000
-        }
-      },
-      "id": "analyze-email-llm",
-      "name": "Summarise Email with LLM",
-      "type": "n8n-nodes-base.httpRequest",
-      "position": [1248, 560],
-      "typeVersion": 4.2
-    },
-    {
-      "parameters": {
         "chatId": "={{ 219678893 }}",
         "text": "📧 Daily Gmail scan complete - no new emails found.",
         "additionalFields": {
@@ -254,45 +206,6 @@
         "telegramApi": {
           "id": "h7RbmzMEg5YYOgNt",
           "name": "Emails Summary Bot"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "promptType": "define",
-        "text": "=Summarize the following email according to the system instructions.\n\nTo: {{ $json.to }}\nFrom: {{ $json.fromAddress }} | {{ $json.fromName }}\nSubject: {{ $json.subject }}\nGmail URL: {{ $json.gmailUrl }}\nReceived: {{ $json.internalDate }}\n\nText:\n{{ $json.text }}",
-        "options": {
-          "systemMessage": "=You are an email analysis agent. Your goal is to analyze an email and produce a structured JSON object describing its key attributes.\n\nFollow these rules strictly:\n1. Summarize the email concisely in plain language (no speculation).\n2. Extract up to 5 actionable items — each must be either:\n  - a short descriptive label with a valid URL starting with http or https, or\n  - plain text if no URL is present.\n3. Determine whether the email is important (true / false).\n4. Assign one category from this fixed list or create a new one:\n\nwork, meeting, personal, finance, travel, delivery,\nnotification, promotion, event, education, support, unknown\n\n\n5. If any field cannot be determined, return \"unknown\" or null.\n6. Do not invent or hallucinate any data.\n7. Output only valid JSON, following exactly the schema below — no extra text or commentary.\n\nExpected JSON format:\n{\n  \"subject\": \"string|null\",\n  \"from\": \"string|null\",\n  \"isImportant\": true,\n  \"summary\": \"string|null\",\n  \"category\": \"string|null\",\n  \"actions\": [\n    {\"label\": \"string\", \"url\": \"string\"}   // or a simple string action\n  ],\n  \"gmailUrl\": \"string|null\",\n  \"receivedDate\": \"string|null\"            // ISO8601, e.g. 2025-10-20T19:30:48Z\n}\n\nExample output:\n{\n  \"subject\": \"Invoice for October\",\n  \"from\": \"Acme Billing <billing@acme.com>\",\n  \"isImportant\": true,\n  \"summary\": \"Your October invoice is ready for payment.\",\n  \"category\": \"finance\",\n  \"actions\": [\n    {\"label\": \"View Invoice\", \"url\": \"https://acme.com/invoices/123\"},\n    {\"label\": \"Pay Now\", \"url\": \"https://acme.com/pay/123\"}\n  ],\n  \"gmailUrl\": \"https://mail.google.com/mail/u/0/#inbox/ABC123\",\n  \"receivedDate\": \"2025-10-24T09:41:12Z\"\n}",
-          "enableStreaming": false
-        }
-      },
-      "id": "eb6c5551-5f1e-4a51-bdde-9c693ae78de8",
-      "name": "AI Agent",
-      "type": "@n8n/n8n-nodes-langchain.agent",
-      "position": [1488, 512],
-      "typeVersion": 2.2
-    },
-    {
-      "parameters": {
-        "model": "llama3.2:3b",
-        "options": {
-          "temperature": 0.2,
-          "topP": 0.9,
-          "keepAlive": "2m",
-          "numThread": 4,
-          "repeatPenalty": 1.1,
-          "format": "json"
-        }
-      },
-      "id": "02311d68-2cbe-4026-bad8-525426237099",
-      "name": "Ollama Chat Model",
-      "type": "@n8n/n8n-nodes-langchain.lmChatOllama",
-      "position": [1488, 704],
-      "typeVersion": 1,
-      "credentials": {
-        "ollamaApi": {
-          "id": "eQ3cvhxCtXxqOlT5",
-          "name": "Local Ollama"
         }
       }
     }
@@ -372,40 +285,8 @@
             "type": "main",
             "index": 0
           }
-        ],
-        [
-          {
-            "node": "Summarise Email with LLM",
-            "type": "main",
-            "index": 0
-          }
         ]
       ]
-    },
-    "Summarise Email with LLM": {
-      "main": [
-        [
-          {
-            "node": "Loop Over Emails",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Ollama Chat Model": {
-      "ai_languageModel": [
-        [
-          {
-            "node": "AI Agent",
-            "type": "ai_languageModel",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "AI Agent": {
-      "main": [[]]
     }
   },
   "active": true,
