@@ -158,13 +158,13 @@ get_docker_resource_usage() {
 
 get_service_health() {
     local service="${1:-}"
-    
+
     if [[ -n "$service" ]]; then
         log_info "Health status for $service:"
-        docker compose ps --format json | jq -r '.[] | select(.Service == "'"$service"'") | {Service, State, Health, Status}'
+        docker compose ps --format json | jq -r 'select(.Service == "'"$service"'") | {Service, State, Health, Status}'
     else
         log_info "Health status for all services:"
-        docker compose ps --format json | jq -r '.[] | {Service, State, Health, Status}'
+        docker compose ps --format json | jq -r '{Service, State, Health, Status}'
     fi
 }
 

@@ -375,12 +375,16 @@ collect_logs_info() {
         
         # Check for specific issues
         print_subsection "Log Issue Analysis"
-        local error_count=$(docker logs --since="1h" "$N8N_CONTAINER" 2>&1 | grep -c -i "error" || echo "0")
-        local warning_count=$(docker logs --since="1h" "$N8N_CONTAINER" 2>&1 | grep -c -i "warn" || echo "0")
-        
+        local error_count=$(docker logs --since="1h" "$N8N_CONTAINER" 2>&1 | grep -c -i "error" || true)
+        local warning_count=$(docker logs --since="1h" "$N8N_CONTAINER" 2>&1 | grep -c -i "warn" || true)
+
+        # Ensure counts are valid numbers (default to 0 if empty)
+        error_count=${error_count:-0}
+        warning_count=${warning_count:-0}
+
         log_info "Errors in last hour: $error_count"
         log_info "Warnings in last hour: $warning_count"
-        
+
         if [[ $error_count -gt 0 ]]; then
             log_warning "Recent errors found:"
             docker logs --since="1h" "$N8N_CONTAINER" 2>&1 | grep -i "error" | tail -3 | while IFS= read -r line; do

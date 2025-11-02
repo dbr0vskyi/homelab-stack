@@ -37,7 +37,7 @@ main() {
     init_volumes
     start_services true  # Force recreate containers in setup
     setup_ollama_models
-    export_initial_workflows
+    import_initial_workflows
     
     # Setup Tailscale funnel for n8n webhooks if Tailscale is available
     if is_tailscale_installed && is_tailscale_connected; then

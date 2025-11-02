@@ -54,9 +54,9 @@ start_monitoring_stack() {
     
     # Start services
     if [[ "$force_recreate" == "true" ]]; then
-        docker-compose --profile monitoring up -d --force-recreate || die "Failed to start monitoring services"
+        docker compose --profile monitoring up -d --force-recreate || die "Failed to start monitoring services"
     else
-        docker-compose --profile monitoring up -d || die "Failed to start monitoring services"
+        docker compose --profile monitoring up -d || die "Failed to start monitoring services"
     fi
     
     log_success "Monitoring stack started"
@@ -65,9 +65,9 @@ start_monitoring_stack() {
 # Stop monitoring stack  
 stop_monitoring_stack() {
     log_monitoring "Stopping monitoring stack..."
-    
-    docker-compose --profile monitoring stop || log_warn "Some services may have failed to stop"
-    
+
+    docker compose --profile monitoring stop || log_warn "Some services may have failed to stop"
+
     log_success "Monitoring stack stopped"
 }
 

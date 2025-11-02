@@ -210,7 +210,8 @@ import_workflows() {
 # Export workflows from n8n to files
 export_workflows() {
     log_info "Exporting workflows from n8n using CLI..."
-    
+    log_info "Note: Exports are cleaned (pinData and runtime metadata removed)"
+
     if ! is_n8n_running; then
         log_error "n8n container is not running"
         return 1
@@ -318,9 +319,18 @@ export_workflows() {
         
         # Copy from container to host
         if docker cp "$N8N_CONTAINER:$exported_file" "$output_file"; then
-            log_success "✓ Exported: $(basename "$output_file")"
+            # Remove pinData and other runtime metadata to keep workflows clean
+            log_debug "Cleaning exported workflow: $(basename "$output_file")"
+            if jq 'del(.pinData, .id, .versionId, .createdAt, .updatedAt, .tags)' "$output_file" > "${output_file}.tmp" 2>/dev/null; then
+                mv "${output_file}.tmp" "$output_file"
+                log_success "✓ Exported (cleaned): $(basename "$output_file")"
+            else
+                # If jq fails, keep the original
+                rm -f "${output_file}.tmp"
+                log_success "✓ Exported: $(basename "$output_file")"
+            fi
             ((exported++))
-            
+
             # Verify the exported file is valid
             if ! jq empty "$output_file" 2>/dev/null; then
                 log_warning "⚠️  Exported file has invalid JSON: $(basename "$output_file")"
@@ -355,38 +365,45 @@ export_workflows() {
     return 0
 }
 
-# Function to export workflows during setup (waits for n8n to be ready)
-export_initial_workflows() {
+# Function to import workflows during setup (waits for n8n to be ready)
+import_initial_workflows() {
     log_info "Setting up workflow synchronization..."
-    
-    # Create workflows directory
-    mkdir -p "$WORKFLOWS_DIR"
-    
+
     # Wait for n8n to be ready
     log_info "Waiting for n8n to be ready..."
     local max_wait=60
     local wait_time=0
-    
+
     while ! is_n8n_running; do
         if [[ $wait_time -ge $max_wait ]]; then
-            log_warning "n8n not ready after ${max_wait}s, skipping workflow export"
-            log_info "You can export workflows later with: ./scripts/manage.sh export-workflows"
+            log_warning "n8n not ready after ${max_wait}s, skipping workflow import"
+            log_info "You can import workflows later with: ./scripts/manage.sh import-workflows"
             return 0
         fi
         sleep 2
         ((wait_time += 2))
     done
-    
+
     # Give n8n a few more seconds to fully initialize
     sleep 5
-    
-    # Export workflows if any exist
-    if export_workflows >/dev/null 2>&1; then
-        log_success "Exported existing workflows to files"
-    else
-        log_info "No existing workflows to export"
+
+    # Check if there are workflow files to import
+    if ! ls "$WORKFLOWS_DIR"/*.json >/dev/null 2>&1; then
+        log_info "No workflow files found in $WORKFLOWS_DIR"
+        log_info "You can add workflow JSON files there and import with: ./scripts/manage.sh import-workflows"
+        return 0
     fi
-    
+
+    # Import workflows from repository
+    log_info "Importing workflows from repository to n8n..."
+    if import_workflows; then
+        log_success "Successfully imported workflows from repository"
+        log_info "Workflows from the repository are now active in n8n"
+    else
+        log_warning "Failed to import some workflows"
+        log_info "Check the logs above for details"
+    fi
+
     log_info "Workflow sync ready. Use: ./scripts/manage.sh import-workflows | export-workflows"
 }
 
