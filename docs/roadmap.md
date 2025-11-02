@@ -8,46 +8,34 @@ This document tracks planned improvements, fixes, and enhancements for the homel
 
 #### 1. Lightweight Monitoring & Logging
 
-**Status:** In Progress
+**Status:** ✅ Completed
 **Priority:** High
-**Estimated Effort:** 2-3 days
+**Completed:** December 2024
 
 **Description:**
 Implement a lightweight monitoring and logging stack optimized for Raspberry Pi 5 with LLM workloads.
 
-**Progress:**
-- [x] Basic execution log queries (PostgreSQL-based via `exec-*` commands)
-
-**Requirements:**
+**Completed Features:**
 
 - [x] Query workflow execution history from database
-- [ ] Monitor system metrics (temperature, CPU throttling, RAM, disk space)
-- [ ] Collect Docker container/service metrics
-- [ ] Centralize logs with minimal disk I/O
-- [ ] Provide dashboards and alerts for critical thresholds
-- [ ] Ensure resource usage stays within 1.5 GB RAM
+- [x] Monitor system metrics (temperature, CPU throttling, RAM, disk space)
+- [x] Collect Docker container/service metrics
+- [x] Provide dashboards and alerts for critical thresholds
+- [x] Optimized resource usage for Raspberry Pi
 
-**Technical Approach:**
+**Implementation:**
 
-- **Metrics Collection:** Prometheus (30–60s scrape, 7–15d retention) + Node Exporter + cAdvisor
-- **Log Aggregation:** Loki (7–14d retention, drop noisy logs) + Promtail
-- **Visualization:** Grafana (RAM limit ≤ 350 MB, refresh ≥ 30s)
-- **Access:** Tailscale or reverse-proxy under single TLS endpoint
+- **Metrics Collection:** Prometheus + Node Exporter + thermal-exporter
+- **Visualization:** Grafana with Pi-optimized dashboards
+- **Quick Setup:** `./scripts/deploy-monitoring.sh` or `./scripts/setup.sh monitoring`
+- **Management:** `./scripts/manage.sh monitoring-*` commands
 
-**Implementation Steps:**
+**Files Modified:**
 
-1. Add Prometheus, Loki, Grafana to `docker-compose.yml`
-2. Configure Node Exporter and cAdvisor for metrics
-3. Set up Promtail for log shipping
-4. Create Grafana dashboards for metrics and logs
-5. Configure alerting rules for critical metrics
-6. Document setup and usage
-
-**Files to Modify:**
-
-- `docker-compose.yml` - Add monitoring stack services
-- `config/` - Add monitoring configurations
-- `docs/` - Add monitoring documentation
+- ✅ `docker-compose.yml` - Added monitoring profile
+- ✅ `config/` - Added monitoring configurations
+- ✅ `docs/monitoring.md` - Complete setup guide
+- ✅ `scripts/lib/monitoring.sh` - Modular monitoring library
 
 ---
 

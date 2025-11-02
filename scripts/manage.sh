@@ -16,6 +16,7 @@ source "${LIB_DIR}/backup.sh"
 source "${LIB_DIR}/ollama.sh"
 source "${LIB_DIR}/workflows.sh"
 source "${LIB_DIR}/executions.sh"
+source "${LIB_DIR}/monitoring.sh"
 
 # Show help
 show_help() {
@@ -48,6 +49,13 @@ Commands:
   Execution Logs:
   exec-latest                Show latest workflow execution
   exec-history [limit]       Show recent execution history (default: 10)
+  
+  Monitoring:
+  monitoring-deploy          Deploy Prometheus + Grafana monitoring stack
+  monitoring-start           Start monitoring services
+  monitoring-stop            Stop monitoring services 
+  monitoring-status          Show monitoring service status
+  thermal-test               Test thermal monitoring stack
   exec-details <id>          Show detailed execution information
   exec-stats                 Show execution statistics summary
   exec-workflow <name> [limit]  Show executions for specific workflow
@@ -310,6 +318,21 @@ case "${1:-}" in
         ;;
     "diagnose")
         diagnose_command "$2"
+        ;;
+    "monitoring-deploy")
+        exec "${SCRIPT_DIR}/deploy-monitoring.sh"
+        ;;
+    "monitoring-start")
+        start_monitoring_stack
+        ;;
+    "monitoring-stop")
+        stop_monitoring_stack
+        ;;
+    "monitoring-status")
+        show_monitoring_status
+        ;;
+    "thermal-test")
+        exec "${SCRIPT_DIR}/test-thermal-monitoring.sh"
         ;;
     "help"|"-h"|"--help")
         show_help

@@ -84,6 +84,11 @@ case "${1:-}" in
         show_tailscale_funnel_status
         exit 0
         ;;
+    "monitoring")
+        export ENABLE_MONITORING=true
+        setup_monitoring_stack true
+        exit 0
+        ;;
     "info")
         show_info
         exit 0
@@ -104,6 +109,7 @@ case "${1:-}" in
         echo "  funnel       - Setup Tailscale funnel for n8n webhooks"
         echo "  funnel-stop  - Stop Tailscale funnel"
         echo "  funnel-status- Show Tailscale funnel status"
+        echo "  monitoring   - Setup monitoring stack (Prometheus + Grafana)"
         echo "  info         - Show setup information"
         echo "  help         - Show this help message"
         echo ""

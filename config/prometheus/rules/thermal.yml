@@ -1,0 +1,44 @@
+# Pi Thermal Alert Rules - Minimal Configuration
+groups:
+  - name: thermal
+    interval: 30s
+    rules:
+      - alert: HighTemperature
+        expr: rpi_cpu_temperature_celsius > 75
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High temperature: {{ $value }}°C"
+
+      - alert: CriticalTemperature
+        expr: rpi_cpu_temperature_celsius > 80
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical temperature: {{ $value }}°C"
+
+      - alert: ThrottlingActive
+        expr: rpi_throttling_active > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "CPU throttling: {{ $labels.reason }}"
+
+      - alert: UnderVoltage
+        expr: rpi_throttling_active{reason="under_voltage"} > 0
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "Under-voltage detected"
+
+      - alert: WorkflowThermalStress
+        expr: rpi_cpu_temperature_celsius > 70
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Thermal stress: {{ $value }}°C"

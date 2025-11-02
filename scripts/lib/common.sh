@@ -42,6 +42,19 @@ log_debug() {
     fi
 }
 
+# Additional logging functions for different contexts
+log_test() { echo -e "${BLUE}[TEST]${NC} $*"; }
+log_pass() { echo -e "${GREEN}[PASS]${NC} $*"; }
+log_fail() { echo -e "${RED}[FAIL]${NC} $*"; }
+log_warn() { echo -e "${YELLOW}[WARN]${NC} $*"; }
+
+# Monitoring-specific logging
+log_monitoring() { echo -e "${BLUE}[MONITORING]${NC} $*"; }
+log_deploy() { echo -e "${BLUE}[DEPLOY]${NC} $*"; }
+
+# Error handling with exit
+die() { log_error "$*"; exit 1; }
+
 # Utility functions
 generate_password() {
     local length=${1:-25}
@@ -76,6 +89,83 @@ get_env_value() {
         tr -d "'" | \
         xargs
     fi
+}
+
+# Common script initialization
+init_script() {
+    set -euo pipefail
+    
+    # Set common directories if not already set
+    if [[ -z "${SCRIPT_DIR:-}" ]]; then
+        readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[1]}")" && pwd)"
+    fi
+    if [[ -z "${PROJECT_DIR:-}" ]]; then
+        readonly PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+    fi
+    
+    # Change to project directory
+    cd "$PROJECT_DIR"
+}
+
+# Platform detection
+detect_platform() {
+    local platform_info=""
+    
+    if [[ "$(uname)" == "Darwin" ]]; then
+        platform_info="macOS $(sw_vers -productVersion) ($(uname -m))"
+        log_debug "Detected: $platform_info"
+        echo "macos"
+        return
+    fi
+    
+    if [[ -f /proc/device-tree/model ]]; then
+        platform_info=$(tr -d '\0' < /proc/device-tree/model 2>/dev/null || echo "Linux")
+        if [[ "$platform_info" == *"Raspberry Pi"* ]]; then
+            log_debug "Detected: $platform_info"
+            echo "raspberry-pi"
+            return
+        fi
+    fi
+    
+    platform_info="Linux $(uname -r)"
+    log_debug "Detected: $platform_info"
+    echo "linux"
+}
+
+# Check if running on Raspberry Pi
+is_raspberry_pi() {
+    [[ "$(detect_platform)" == "raspberry-pi" ]]
+}
+
+# Check resource constraints
+check_system_resources() {
+    local min_ram_mb=${1:-1024}
+    local min_disk_mb=${2:-2048}
+    
+    # Memory check (cross-platform)
+    local total_mem
+    if [[ "$(uname)" == "Darwin" ]]; then
+        total_mem=$(( $(sysctl -n hw.memsize) / 1024 / 1024 ))
+    else
+        total_mem=$(awk '/MemTotal:/ {print int($2/1024)}' /proc/meminfo)
+    fi
+    
+    if (( total_mem < min_ram_mb )); then
+        log_warn "Limited RAM (${total_mem}MB) - may need resource optimization"
+        return 1
+    fi
+    
+    # Disk space check  
+    local available_space
+    available_space=$(df "${PROJECT_DIR:-$(pwd)}" | awk 'NR==2 {print int($4/1024)}')
+    
+    if (( available_space < min_disk_mb )); then
+        log_warn "Limited disk space (${available_space}MB available)"
+        return 1
+    fi
+    
+    log_debug "Resources OK: ${total_mem}MB RAM, ${available_space}MB disk"
+    return 0
 }
 
 # Update value in .env file

@@ -15,6 +15,7 @@ Self-hosted automation platform for Raspberry Pi 5/macOS. Automate workflows wit
 - **n8n** - Workflow automation platform
 - **PostgreSQL** - Reliable database backend
 - **Ollama** - Local LLM inference
+- **Prometheus + Grafana** - Monitoring and thermal tracking (optional)
 - **Tailscale** - Zero-trust network access (optional)
 
 ## 🚀 Quick Start
@@ -39,11 +40,17 @@ nano .env  # Add your tokens
 ## 📋 Management
 
 ```bash
-./scripts/manage.sh status       # Check services
-./scripts/manage.sh logs         # View logs
-./scripts/manage.sh exec-latest  # Show workflow executions
-./scripts/backup.sh             # Create backup
-./scripts/setup.sh funnel       # Enable external webhooks
+./scripts/manage.sh status          # Check services
+./scripts/manage.sh logs            # View logs
+./scripts/manage.sh exec-latest     # Show workflow executions
+./scripts/backup.sh                 # Create backup
+
+# Optional monitoring
+./scripts/setup.sh monitoring       # Install monitoring stack
+./scripts/manage.sh monitoring-*    # Monitoring commands
+
+# External access
+./scripts/setup.sh funnel          # Enable external webhooks
 ```
 
 Run any script without arguments to see all options.
@@ -52,12 +59,12 @@ Run any script without arguments to see all options.
 
 **This project uses a Raspberry Pi 5 with 16GB RAM** - ideal for running larger models like qwen2.5:14b.
 
-| Device            | RAM  | Models        | Performance      |
-| ----------------- | ---- | ------------- | ---------------- |
-| **Pi 5 4GB**      | 4GB  | `llama3.2:1b` | Basic automation |
-| **Pi 5 8GB**      | 8GB  | `llama3.1:8b` | Good performance |
-| **Pi 5 16GB** ⭐   | 16GB | `qwen2.5:14b` to `qwen2.5:32b` | High performance (current setup) |
-| **Apple Silicon** | 8GB+ | Any models    | Excellent        |
+| Device            | RAM  | Models                         | Performance                      |
+| ----------------- | ---- | ------------------------------ | -------------------------------- |
+| **Pi 5 4GB**      | 4GB  | `llama3.2:1b`                  | Basic automation                 |
+| **Pi 5 8GB**      | 8GB  | `llama3.1:8b`                  | Good performance                 |
+| **Pi 5 16GB** ⭐  | 16GB | `qwen2.5:14b` to `qwen2.5:32b` | High performance (current setup) |
+| **Apple Silicon** | 8GB+ | Any models                     | Excellent                        |
 
 ## 📚 Documentation
 
@@ -66,6 +73,7 @@ Run any script without arguments to see all options.
 - [🔗 **API Configuration**](docs/api-setup.md) - Telegram, Notion, Gmail setup
 - [⚡ **Workflow Management**](docs/workflows.md) - Import/export and examples
 - [🖥️ **Hardware Optimization**](docs/hardware-setup.md) - Platform-specific tuning
+- [📊 **Monitoring Setup**](docs/monitoring.md) - Thermal monitoring and performance tracking
 
 ## � Long-Running LLM Calls
 

@@ -28,6 +28,13 @@ show_service_urls() {
         echo "  📊 n8n Workflows: https://localhost (HTTPS enabled)"
     fi
     echo "  🤖 Ollama API: http://localhost:11434"
+    
+    # Show monitoring URLs if enabled
+    if [[ "${ENABLE_MONITORING:-false}" == "true" ]]; then
+        echo "  🔍 Prometheus: http://localhost:9090"
+        echo "  📈 Grafana: http://localhost:3000 (admin/admin)"
+        echo "  🌡️ Thermal Metrics: http://localhost:9200/metrics"
+    fi
     echo
 }
 

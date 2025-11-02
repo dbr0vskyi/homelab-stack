@@ -69,6 +69,8 @@ services:
       - n8n_data:/home/node/.n8n
       - ./workflows:/home/node/.n8n/workflows
       - ./config/n8n/patch-http-timeouts.js:/patch/patch-http-timeouts.js:ro
+      - ./scripts:/scripts:ro
+      - ./logs:/logs
     networks:
       - homelab
     depends_on:
@@ -169,6 +171,154 @@ services:
       timeout: 10s
       retries: 3
 
+  # Prometheus - Metrics collection (Pi-optimized)
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: homelab-prometheus
+    restart: unless-stopped
+    environment:
+      - TZ=${TIMEZONE:-Europe/Warsaw}
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    volumes:
+      - prometheus_data:/prometheus
+      - ./config/prometheus:/etc/prometheus:ro
+    networks:
+      - homelab
+    profiles:
+      - monitoring
+    deploy:
+      resources:
+        limits:
+          memory: 512M  # Limited for Pi
+          cpus: '0.5'
+        reservations:
+          memory: 256M
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=7d'  # 7 days retention for Pi
+      - '--storage.tsdb.retention.size=2GB'  # Limit storage size
+      - '--web.enable-lifecycle'
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Grafana - Visualization dashboard (Pi-optimized)
+  grafana:
+    image: grafana/grafana:latest
+    container_name: homelab-grafana
+    restart: unless-stopped
+    environment:
+      - TZ=${TIMEZONE:-Europe/Warsaw}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_USER:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_INSTALL_PLUGINS=
+      - GF_SERVER_DOMAIN=${GRAFANA_DOMAIN:-localhost}
+      - GF_SERVER_ROOT_URL=https://${GRAFANA_DOMAIN:-localhost}/grafana/
+      - GF_SERVER_SERVE_FROM_SUB_PATH=true
+      # Pi optimizations
+      - GF_DATABASE_WAL=false
+      - GF_LOG_LEVEL=warn
+      - GF_ANALYTICS_REPORTING_ENABLED=false
+      - GF_ANALYTICS_CHECK_FOR_UPDATES=false
+      - GF_NEWS_NEWS_FEED_ENABLED=false
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./config/grafana:/etc/grafana/provisioning:ro
+    networks:
+      - homelab
+    profiles:
+      - monitoring
+    deploy:
+      resources:
+        limits:
+          memory: 256M  # Limited for Pi
+          cpus: '0.3'
+        reservations:
+          memory: 128M
+    depends_on:
+      - prometheus
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3000/api/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Node Exporter - System metrics
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: homelab-node-exporter
+    restart: unless-stopped
+    environment:
+      - TZ=${TIMEZONE:-Europe/Warsaw}
+    ports:
+      - "9100:9100"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    networks:
+      - homelab
+    profiles:
+      - monitoring
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+          cpus: '0.1'
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.rootfs=/rootfs'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+      - '--collector.textfile.directory=/var/lib/node_exporter/textfile_collector'
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9100/metrics"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Thermal Exporter - Custom Pi thermal metrics
+  thermal-exporter:
+    build:
+      context: .
+      dockerfile: config/thermal-exporter/Dockerfile
+    container_name: homelab-thermal-exporter
+    restart: unless-stopped
+    environment:
+      - TZ=${TIMEZONE:-Europe/Warsaw}
+      - METRICS_PORT=9200
+      - COLLECT_INTERVAL=30
+      - N8N_WEBHOOK_URL=http://n8n:5678/webhook/thermal-alert
+    ports:
+      - "9200:9200"
+    volumes:
+      - /sys:/host/sys:ro
+      - /proc:/host/proc:ro
+    networks:
+      - homelab
+    profiles:
+      - monitoring
+    deploy:
+      resources:
+        limits:
+          memory: 32M
+          cpus: '0.05'
+    privileged: true  # Required for vcgencmd access
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9200/metrics"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
   # Watchtower - Automatic container updates
   watchtower:
     image: containrrr/watchtower:latest
@@ -203,6 +353,12 @@ volumes:
     external: true
   redis_data:
     name: homelab_redis_data
+    external: true
+  prometheus_data:
+    name: homelab_prometheus_data
+    external: true
+  grafana_data:
+    name: homelab_grafana_data
     external: true
 
 networks:

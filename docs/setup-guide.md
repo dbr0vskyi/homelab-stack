@@ -62,6 +62,27 @@ GMAIL_CLIENT_SECRET=your-gmail-secret
 - **n8n**: `https://localhost:8443` (or your Tailscale domain)
 - **Ollama**: `http://localhost:11434`
 
+## 📊 Monitoring Setup (Optional)
+
+Add performance monitoring and thermal tracking for Raspberry Pi:
+
+```bash
+# Deploy monitoring stack
+./scripts/setup.sh monitoring
+
+# Access monitoring interfaces
+# - Prometheus: http://localhost:9090
+# - Grafana: http://localhost:3000 (admin/admin)
+
+# Management commands
+./scripts/manage.sh monitoring-status    # Check health
+./scripts/manage.sh monitoring-stop     # Stop monitoring
+./scripts/manage.sh monitoring-start    # Start monitoring
+```
+
+**Resource Usage**: ~768MB RAM, 2GB storage (7-day retention)
+**Benefits**: Thermal monitoring, performance tracking, workflow correlation
+
 ## 🌐 Tailscale Integration (Optional)
 
 ### SSL Certificates

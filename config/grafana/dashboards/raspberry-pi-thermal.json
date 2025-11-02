@@ -1,0 +1,167 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "Raspberry Pi Thermal Monitoring",
+    "tags": ["raspberry-pi", "thermal", "homelab"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "title": "CPU Temperature",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "rpi_cpu_temperature_celsius",
+            "legendFormat": "CPU Temperature"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                { "color": "green", "value": null },
+                { "color": "yellow", "value": 60 },
+                { "color": "orange", "value": 75 },
+                { "color": "red", "value": 80 }
+              ]
+            },
+            "unit": "celsius"
+          }
+        },
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 }
+      },
+      {
+        "id": 2,
+        "title": "Temperature History",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "rpi_cpu_temperature_celsius",
+            "legendFormat": "CPU Temperature"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": { "mode": "palette-classic" },
+            "custom": {
+              "drawStyle": "line",
+              "lineInterpolation": "linear",
+              "fillOpacity": 10,
+              "gradientMode": "none"
+            },
+            "thresholds": {
+              "steps": [
+                { "color": "green", "value": null },
+                { "color": "red", "value": 80 }
+              ]
+            },
+            "unit": "celsius"
+          }
+        },
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 }
+      },
+      {
+        "id": 3,
+        "title": "Throttling Status",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "rpi_throttling_active",
+            "legendFormat": "{{reason}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                { "color": "green", "value": 0 },
+                { "color": "red", "value": 1 }
+              ]
+            },
+            "mappings": [
+              { "options": { "0": { "text": "Normal" } }, "type": "value" },
+              { "options": { "1": { "text": "THROTTLED" } }, "type": "value" }
+            ]
+          }
+        },
+        "gridPos": { "h": 4, "w": 12, "x": 0, "y": 8 }
+      },
+      {
+        "id": 4,
+        "title": "CPU Frequency",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "rpi_arm_frequency_hz / 1000000",
+            "legendFormat": "ARM Frequency (MHz)"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": { "mode": "palette-classic" },
+            "unit": "hertz"
+          }
+        },
+        "gridPos": { "h": 4, "w": 12, "x": 12, "y": 8 }
+      },
+      {
+        "id": 5,
+        "title": "Core Voltage",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "rpi_core_voltage_volts",
+            "legendFormat": "Core Voltage"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": { "mode": "palette-classic" },
+            "unit": "volt",
+            "thresholds": {
+              "steps": [
+                { "color": "red", "value": null },
+                { "color": "yellow", "value": 1.15 },
+                { "color": "green", "value": 1.2 },
+                { "color": "yellow", "value": 1.4 },
+                { "color": "red", "value": 1.45 }
+              ]
+            }
+          }
+        },
+        "gridPos": { "h": 4, "w": 12, "x": 0, "y": 12 }
+      },
+      {
+        "id": 6,
+        "title": "Memory Split",
+        "type": "piechart",
+        "targets": [
+          {
+            "expr": "rpi_memory_temp_split_mb",
+            "legendFormat": "{{type}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": { "mode": "palette-classic" },
+            "unit": "decbytes"
+          }
+        },
+        "gridPos": { "h": 4, "w": 12, "x": 12, "y": 12 }
+      }
+    ],
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "refresh": "30s",
+    "schemaVersion": 36,
+    "version": 1
+  }
+}

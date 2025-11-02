@@ -263,3 +263,20 @@ restore_volume_from_tar() {
         alpine \
         tar xzf "/backup/$(basename "$backup_path")" -C /data
 }
+
+# Load monitoring functions
+source "$(dirname "${BASH_SOURCE[0]}")/monitoring.sh"
+
+# Monitoring-specific Docker operations
+docker_compose_monitoring() {
+    local action="$1"
+    shift
+    
+    cd "$PROJECT_DIR"
+    docker-compose --profile monitoring "$action" "$@"
+}
+
+show_monitoring_status() {
+    # Use centralized monitoring status function
+    show_monitoring_status
+}

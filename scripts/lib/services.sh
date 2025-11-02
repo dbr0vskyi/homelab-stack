@@ -17,6 +17,12 @@ init_volumes() {
     create_volume "homelab_n8n_data" "n8n" 
     create_volume "homelab_ollama_data" "ollama"
     
+    # Create monitoring volumes if monitoring is enabled
+    if [[ "${ENABLE_MONITORING:-false}" == "true" ]]; then
+        create_volume "homelab_prometheus_data" "prometheus"
+        create_volume "homelab_grafana_data" "grafana"
+    fi
+    
     log_success "Docker volumes initialized"
 }
 
@@ -79,6 +85,11 @@ start_optional_services() {
     if [[ "${ENABLE_WATCHTOWER:-false}" == "true" ]]; then
         start_service "watchtower" "Watchtower" "$force_recreate"
     fi
+    
+    # Start monitoring services if enabled
+    if [[ "${ENABLE_MONITORING:-false}" == "true" ]]; then
+        setup_monitoring_stack "$force_recreate"
+    fi
 }
 
 start_service() {
@@ -100,5 +111,19 @@ start_service() {
             log_error "Failed to start ${display_name}"
             exit 1
         fi
+    fi
+}
+
+# Load monitoring functions
+source "$(dirname "${BASH_SOURCE[0]}")/monitoring.sh"
+
+setup_monitoring_stack() {
+    local force_recreate="${1:-false}"
+    
+    # Use the centralized monitoring library function
+    if [[ "$force_recreate" == "true" ]]; then
+        start_monitoring_stack true
+    else
+        start_monitoring_stack false
     fi
 }
