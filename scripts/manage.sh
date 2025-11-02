@@ -63,6 +63,7 @@ Commands:
   exec-data <id> [file]      Extract raw execution data (optionally save to file)
   exec-parse <id> [options]  Parse execution data and extract node outputs
   exec-llm <id>              Analyze LLM responses with JSON validation
+  exec-monitoring <id>       Get monitoring data (temp, CPU, memory) for execution
 
   Diagnostic Tools:
   diagnose                   Universal environment diagnostic tool
@@ -84,6 +85,7 @@ Examples:
   $0 exec-data 191 exec-191.json     # Extract raw execution data to file
   $0 exec-parse 191 --llm-only       # Parse and extract LLM responses
   $0 exec-llm 191                    # Analyze LLM responses with validation
+  $0 exec-monitoring 200             # Get temperature/CPU/memory data for execution
   $0 diagnose                        # Full system diagnostic
   $0 diagnose database               # Database analysis only
   $0 diagnose summary                # Quick system summary
@@ -315,6 +317,9 @@ case "${1:-}" in
         ;;
     "exec-llm")
         analyze_llm_responses "$2"
+        ;;
+    "exec-monitoring")
+        get_execution_monitoring_data "$2"
         ;;
     "diagnose")
         diagnose_command "$2"

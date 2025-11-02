@@ -15,6 +15,11 @@ Investigate the specified workflow execution with forensic-level detail, identif
 3. **Parse execution data** using `./scripts/manage.sh exec-parse <execution_id>`
 4. **Extract raw data** using `./scripts/manage.sh exec-data <execution_id> /tmp/exec-<id>-data.json`
 5. **Get execution history** using `./scripts/manage.sh exec-history 10` for context
+6. **Gather monitoring data** (temperature, CPU, memory during execution):
+   - Extract execution start/end timestamps from exec-details
+   - Query Prometheus for temperature history during execution
+   - Query system metrics (CPU, memory, throttling events)
+   - Correlate thermal events with workflow phases
 
 ### Phase 2: Model Verification
 
@@ -66,6 +71,25 @@ Analyze the following dimensions:
 - **Contributing factors** (what made it worse?)
 - **Systemic vs. transient** (one-time issue or pattern?)
 - **Upstream dependencies** (configuration, resources, external services)
+
+#### System Health & Monitoring Analysis
+- **Temperature monitoring** (thermal performance during execution)
+  - Start/end/peak/average CPU temperature
+  - Temperature rise and heating rate
+  - Thermal throttling events (if any)
+  - Correlation between workflow phases and temperature spikes
+- **CPU utilization** (processor load during execution)
+  - Average/peak CPU usage percentage
+  - CPU usage pattern throughout execution
+  - Identification of CPU-intensive workflow phases
+- **Memory usage** (RAM consumption during execution)
+  - Start/end/peak/average memory availability
+  - Memory consumed during execution
+  - Memory pressure indicators
+- **Overall system health** (health check during execution)
+  - Throttling status (thermal/frequency/voltage)
+  - Service health status
+  - Resource constraint identification
 
 ### Phase 4: Recommendations
 
@@ -135,6 +159,12 @@ Analyze and suggest improvements for:
    - Timeout configuration
    - Resource allocation
 
+5. **Thermal management** (if temperature issues detected):
+   - Active cooling recommendations
+   - Workload distribution strategies
+   - Model selection for thermal efficiency
+   - Scheduling during cooler periods
+
 ## Report Generation
 
 **ALWAYS create a markdown investigation report** with the following structure:
@@ -171,6 +201,32 @@ Analyze and suggest improvements for:
 - **[Workflow-specific metrics]**
 
 **Comparison with Previous Executions:** [if applicable]
+
+---
+
+## System Health & Monitoring
+
+**Thermal Performance:**
+- **Temperature Range**: [start]°C → [peak]°C
+- **Average Temperature**: [avg]°C
+- **Temperature Rise**: [delta]°C
+- **Thermal Throttling**: [Yes/No - describe events if any]
+
+**CPU Utilization:**
+- **Average CPU Usage**: [avg]%
+- **Peak CPU Usage**: [peak]%
+- **CPU-Intensive Phases**: [list phases with high CPU]
+
+**Memory Usage:**
+- **Starting Available**: [X] GB
+- **Ending Available**: [X] GB
+- **Peak Memory Used**: [X] GB ([X]%)
+- **Memory Pressure**: [Yes/No]
+
+**Overall Health Status**: [Healthy/Warning/Critical]
+
+**Thermal-Workflow Correlation:**
+[Describe how temperature correlated with workflow phases, identify heat-generating operations]
 
 ---
 

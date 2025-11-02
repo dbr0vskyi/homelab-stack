@@ -12,6 +12,11 @@ declare -a MONITORING_SERVICES=(
     "node-exporter:9100:/metrics"
 )
 
+# PostgreSQL configuration (matches executions.sh)
+POSTGRES_CONTAINER="homelab-postgres"
+POSTGRES_USER="n8n"
+POSTGRES_DB="n8n"
+
 # Build thermal exporter image
 build_thermal_exporter() {
     log_monitoring "Building thermal exporter image..."
@@ -213,15 +218,202 @@ EOF
 # Monitoring integration for setup
 setup_monitoring_stack() {
     local force_recreate="${1:-false}"
-    
+
     log_info "Setting up monitoring stack..."
-    
+
     # Build and start monitoring services
     if [[ "$force_recreate" == "true" ]]; then
         start_monitoring_stack true
     else
         start_monitoring_stack false
     fi
-    
+
     log_success "Monitoring stack setup complete"
+}
+
+# Query Prometheus for execution metrics
+query_execution_metrics() {
+    local execution_id="$1"
+    local start_time="$2"
+    local end_time="$3"
+
+    if [[ -z "$execution_id" ]] || [[ -z "$start_time" ]] || [[ -z "$end_time" ]]; then
+        log_error "Usage: query_execution_metrics <execution_id> <start_time_iso> <end_time_iso>"
+        return 1
+    fi
+
+    log_info "Querying monitoring data for execution #${execution_id}..."
+
+    # Convert ISO timestamps to Unix
+    local start_unix end_unix
+    start_unix=$(date -d "$start_time" +%s 2>/dev/null)
+    end_unix=$(date -d "$end_time" +%s 2>/dev/null)
+
+    if [[ -z "$start_unix" ]] || [[ -z "$end_unix" ]]; then
+        log_error "Invalid timestamp format. Use ISO 8601 format (e.g., 2025-11-02T19:35:23+01:00)"
+        return 1
+    fi
+
+    local duration_min=$(( (end_unix - start_unix) / 60 ))
+
+    echo "======================================================================"
+    echo "MONITORING DATA FOR EXECUTION #${execution_id}"
+    echo "======================================================================"
+    echo "Time Range: ${start_time} to ${end_time}"
+    echo "Duration: ${duration_min} minutes"
+    echo ""
+
+    # Temperature query
+    local temp_data
+    temp_data=$(curl -s "http://localhost:9090/api/v1/query_range?query=rpi_cpu_temperature_celsius&start=${start_unix}&end=${end_unix}&step=60")
+
+    if echo "$temp_data" | grep -q '"status":"success"'; then
+        echo "🌡️  CPU TEMPERATURE"
+        echo "----------------------------------------------------------------------"
+        echo "$temp_data" | python3 -c "
+import json, sys
+data = json.load(sys.stdin)
+if data['status'] == 'success' and data['data']['result']:
+    values = data['data']['result'][0]['values']
+    temps = [float(v[1]) for v in values]
+    if temps:
+        print(f'  Samples:    {len(values)} readings')
+        print(f'  Start:      {temps[0]:.1f}°C')
+        print(f'  End:        {temps[-1]:.1f}°C')
+        print(f'  Minimum:    {min(temps):.1f}°C')
+        print(f'  Maximum:    {max(temps):.1f}°C')
+        print(f'  Average:    {sum(temps)/len(temps):.1f}°C')
+        print(f'  Change:     {temps[-1]-temps[0]:+.1f}°C')
+else:
+    print('  No data available')
+" 2>/dev/null || echo "  Error parsing temperature data"
+    else
+        echo "  No temperature data available"
+    fi
+
+    echo ""
+
+    # Throttling query
+    local throttle_data
+    throttle_data=$(curl -s "http://localhost:9090/api/v1/query_range?query=rpi_throttling_status&start=${start_unix}&end=${end_unix}&step=60")
+
+    echo "🚦 THROTTLING STATUS"
+    echo "----------------------------------------------------------------------"
+    if echo "$throttle_data" | grep -q '"status":"success"'; then
+        echo "$throttle_data" | python3 -c "
+import json, sys
+data = json.load(sys.stdin)
+if data['status'] == 'success' and data['data']['result']:
+    values = data['data']['result'][0]['values']
+    throttles = [int(float(v[1])) for v in values]
+    if any(throttles):
+        print(f'  ⚠️  THROTTLING DETECTED')
+        print(f'  Max value: {max(throttles)}')
+    else:
+        print(f'  ✅ NO THROTTLING')
+        print(f'  All {len(values)} readings: 0')
+else:
+    print('  No data available')
+" 2>/dev/null || echo "  Error parsing throttling data"
+    else
+        echo "  No throttling data available"
+    fi
+
+    echo ""
+
+    # Memory query
+    local mem_data
+    mem_data=$(curl -s "http://localhost:9090/api/v1/query_range?query=node_memory_MemAvailable_bytes&start=${start_unix}&end=${end_unix}&step=60")
+
+    echo "💾 MEMORY USAGE"
+    echo "----------------------------------------------------------------------"
+    if echo "$mem_data" | grep -q '"status":"success"'; then
+        echo "$mem_data" | python3 -c "
+import json, sys
+data = json.load(sys.stdin)
+if data['status'] == 'success' and data['data']['result']:
+    values = data['data']['result'][0]['values']
+    mem_gb = [float(v[1]) / (1024**3) for v in values]
+    if mem_gb:
+        total_ram = 16.0  # Raspberry Pi 5 16GB
+        used_start = total_ram - mem_gb[0]
+        used_end = total_ram - mem_gb[-1]
+        used_peak = total_ram - min(mem_gb)
+        print(f'  Total RAM:  {total_ram:.1f} GB')
+        print(f'  Start Avail: {mem_gb[0]:.2f} GB (used: {used_start:.2f} GB, {used_start/total_ram*100:.1f}%)')
+        print(f'  End Avail:   {mem_gb[-1]:.2f} GB (used: {used_end:.2f} GB, {used_end/total_ram*100:.1f}%)')
+        print(f'  Peak Used:   {used_peak:.2f} GB ({used_peak/total_ram*100:.1f}%)')
+        print(f'  Consumed:    {used_end - used_start:+.2f} GB')
+else:
+    print('  No data available')
+" 2>/dev/null || echo "  Error parsing memory data"
+    else
+        echo "  No memory data available"
+    fi
+
+    echo ""
+
+    # CPU usage query
+    local cpu_data
+    cpu_data=$(curl -s "http://localhost:9090/api/v1/query_range?query=100%20-%20(avg%20by(instance)%20(rate(node_cpu_seconds_total{mode=\"idle\"}[5m]))%20*%20100)&start=${start_unix}&end=${end_unix}&step=60")
+
+    echo "⚙️  CPU UTILIZATION"
+    echo "----------------------------------------------------------------------"
+    if echo "$cpu_data" | grep -q '"status":"success"'; then
+        echo "$cpu_data" | python3 -c "
+import json, sys
+data = json.load(sys.stdin)
+if data['status'] == 'success' and data['data']['result']:
+    values = data['data']['result'][0]['values']
+    cpu_usage = [float(v[1]) for v in values]
+    if cpu_usage:
+        print(f'  Start:      {cpu_usage[0]:.1f}%')
+        print(f'  End:        {cpu_usage[-1]:.1f}%')
+        print(f'  Peak:       {max(cpu_usage):.1f}%')
+        print(f'  Average:    {sum(cpu_usage)/len(cpu_usage):.1f}%')
+else:
+    print('  No data available')
+" 2>/dev/null || echo "  Error parsing CPU data"
+    else
+        echo "  No CPU data available"
+    fi
+
+    echo ""
+    echo "======================================================================"
+}
+
+# Get execution timestamps and query metrics
+get_execution_monitoring_data() {
+    local execution_id="$1"
+
+    if [[ -z "$execution_id" ]]; then
+        log_error "Usage: get_execution_monitoring_data <execution_id>"
+        return 1
+    fi
+
+    log_info "Fetching execution timestamps for #${execution_id}..."
+
+    # Get execution details from PostgreSQL
+    local exec_data
+    exec_data=$(docker compose exec -T postgres psql -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" -t -c \
+        "SELECT \"startedAt\", \"stoppedAt\" FROM execution_entity WHERE id = ${execution_id};" 2>/dev/null)
+
+    if [[ -z "$exec_data" ]]; then
+        log_error "Execution #${execution_id} not found in database"
+        return 1
+    fi
+
+    # Parse timestamps (format: YYYY-MM-DD HH:MM:SS.ms+TZ | YYYY-MM-DD HH:MM:SS.ms+TZ)
+    local start_time end_time start_part end_part
+    IFS='|' read -r start_part end_part <<< "$exec_data"
+    start_time=$(echo "$start_part" | awk '{print $1"T"$2}' | sed 's/\..*//')
+    end_time=$(echo "$end_part" | awk '{print $1"T"$2}' | sed 's/\..*//')
+
+    if [[ -z "$start_time" ]] || [[ -z "$end_time" ]]; then
+        log_error "Failed to parse execution timestamps"
+        return 1
+    fi
+
+    # Query metrics
+    query_execution_metrics "$execution_id" "$start_time" "$end_time"
 }

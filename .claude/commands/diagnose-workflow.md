@@ -14,6 +14,7 @@ Provide fast triage and immediate guidance for workflow problems. This is the li
 2. **If specific execution provided**: `./scripts/manage.sh exec-details <id>`
 3. **Check for failures**: `./scripts/manage.sh exec-failed 5`
 4. **Quick stats**: `./scripts/manage.sh exec-stats`
+5. **Get monitoring data**: `./scripts/manage.sh exec-monitoring <id>` (temperature, CPU, memory)
 
 ### Rapid Analysis Points
 
@@ -23,6 +24,8 @@ Ask yourself:
 - ❌ Are there failures? (success rate)
 - 🔄 Is it stuck? (check timestamps)
 - 🤖 LLM issues? (quick parse check)
+- 🌡️ Thermal issues? (temperature spikes, throttling)
+- 💾 Memory pressure? (OOM, excessive usage)
 
 ### Fast Diagnosis Output
 
@@ -41,6 +44,11 @@ Quick Findings:
   • JSON parsing: 100% success ✅
   • Model: llama3.1:8b (good choice)
   • Bottleneck: Raw HTML input (127KB)
+
+System Health:
+  🌡️ Temperature: 47°C → 70°C (peak, no throttling)
+  💻 CPU: 88% avg, 100% peak
+  💾 Memory: +2.5 GB consumed (16 GB total)
 
 Immediate Fix:
   → Add HTML preprocessing before LLM
