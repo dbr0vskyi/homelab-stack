@@ -54,25 +54,27 @@
 
   // Patch axios if available (used by LangChain components)
   try {
-    const axios = require('axios');
+    const axios = require("axios");
     if (axios && axios.defaults) {
-      axios.defaults.timeout = toNum(process.env.FETCH_BODY_TIMEOUT, 12000000);
+      axios.defaults.timeout = toNum(process.env.FETCH_BODY_TIMEOUT, 43200000);
       console.log(`[patch] axios timeout set to ${axios.defaults.timeout}ms`);
     }
   } catch (e) {
-    console.log('[patch] axios not available, skipping');
+    console.log("[patch] axios not available, skipping");
   }
 
   // Patch global fetch timeout (for LangChain Ollama nodes)
-  if (typeof globalThis.fetch !== 'undefined') {
+  if (typeof globalThis.fetch !== "undefined") {
     const originalFetch = globalThis.fetch;
     globalThis.fetch = function (url, options = {}) {
       // Detect Ollama requests by port 11434 OR hostname containing 'ollama'
-      const isOllamaRequest = url && typeof url === 'string' &&
-        (url.includes('ollama') || url.includes(':11434'));
+      const isOllamaRequest =
+        url &&
+        typeof url === "string" &&
+        (url.includes("ollama") || url.includes(":11434"));
 
       if (isOllamaRequest) {
-        console.log('[patch] Extending timeout for Ollama fetch request:', url);
+        console.log("[patch] Extending timeout for Ollama fetch request:", url);
         // Remove any existing timeout signal
         delete options.signal;
 
@@ -80,7 +82,7 @@
         const controller = new AbortController();
         const timeoutId = setTimeout(
           () => controller.abort(),
-          toNum(process.env.FETCH_BODY_TIMEOUT, 12000000)
+          toNum(process.env.FETCH_BODY_TIMEOUT, 43200000)
         );
 
         options.signal = controller.signal;
@@ -91,7 +93,7 @@
       }
       return originalFetch.call(this, url, options);
     };
-    console.log('[patch] Global fetch patched for Ollama requests');
+    console.log("[patch] Global fetch patched for Ollama requests");
   }
 
   // Outbound: undici (Node fetch) timeouts (affects n8n -> LLM/API)
@@ -99,8 +101,8 @@
   try {
     const { Agent, setGlobalDispatcher } = require("undici");
 
-    const headersTimeout = toNum(process.env.FETCH_HEADERS_TIMEOUT, 180_000); // default 3 min for first byte/headers
-    const bodyTimeout = toNum(process.env.FETCH_BODY_TIMEOUT, 1_200_000); // default 20 min for full body/stream
+    const headersTimeout = toNum(process.env.FETCH_HEADERS_TIMEOUT, 10_800_000); // default 3 hours for first byte/headers
+    const bodyTimeout = toNum(process.env.FETCH_BODY_TIMEOUT, 43_200_000); // default 12 hours for full body/stream
     const connectTimeout = toNum(process.env.FETCH_CONNECT_TIMEOUT, 60_000); // 60s TCP/TLS connect
     const keepAliveTimeout = toNum(process.env.FETCH_KEEPALIVE_TIMEOUT, 65_000);
 

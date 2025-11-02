@@ -89,9 +89,9 @@ This stack includes a timeout patch to enable AI Agent nodes with long-running L
 
 **Timeout Configuration**:
 
-- **Workflow execution**: 6 hours (`N8N_WORKFLOW_TIMEOUT=21600`)
-- **LLM headers response**: 30 minutes (`FETCH_HEADERS_TIMEOUT=1800000`)
-- **LLM body streaming**: 3.33 hours (`FETCH_BODY_TIMEOUT=12000000`)
+- **Workflow execution**: 12 hours (`N8N_WORKFLOW_TIMEOUT=43200`)
+- **LLM headers response**: 3 hours (`FETCH_HEADERS_TIMEOUT=10800000`)
+- **LLM body streaming**: 12 hours (`FETCH_BODY_TIMEOUT=43200000`)
 
 **Files**:
 

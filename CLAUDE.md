@@ -9,6 +9,7 @@ This is a self-hosted homelab automation stack designed for Raspberry Pi 5 and m
 ## Architecture
 
 ### Docker Stack
+
 - **n8n**: Workflow automation platform (port 8443) with PostgreSQL backend
 - **PostgreSQL**: Database backend for n8n workflows and execution history
 - **Ollama**: Local LLM inference server (port 11434) for privacy-first AI processing
@@ -23,17 +24,19 @@ All services are networked via a bridge network (`homelab_network`) and use exte
 The stack includes a **custom timeout patch** (`config/n8n/patch-http-timeouts.js`) to enable long-running LLM calls. This is essential for AI Agent nodes and complex workflows.
 
 **What it patches:**
+
 - Node.js HTTP server (browser → n8n requests)
 - Axios library (used by LangChain components)
 - Global fetch (extends timeout for Ollama URLs)
 - Undici dispatcher (n8n → LLM API calls)
 
 **Key timeout values (in docker-compose.yml):**
-- Workflow execution: 6 hours (`N8N_WORKFLOW_TIMEOUT=21600`)
+
+- Workflow execution: 12 hours (`N8N_WORKFLOW_TIMEOUT=43200`)
 - Inbound request: disabled (`N8N_HTTP_REQUEST_TIMEOUT=0`)
 - Outbound connect: 10 min (`FETCH_CONNECT_TIMEOUT=600000`)
-- Outbound headers: 30 min (`FETCH_HEADERS_TIMEOUT=1800000`)
-- Outbound body/stream: 3.3 hours (`FETCH_BODY_TIMEOUT=12000000`)
+- Outbound headers: 3 hours (`FETCH_HEADERS_TIMEOUT=10800000`)
+- Outbound body/stream: 12 hours (`FETCH_BODY_TIMEOUT=43200000`)
 
 The patch is preloaded via `NODE_OPTIONS=--require /patch/patch-http-timeouts.js`. When modifying timeout behavior, edit environment variables in docker-compose.yml.
 
@@ -42,6 +45,7 @@ The patch is preloaded via `NODE_OPTIONS=--require /patch/patch-http-timeouts.js
 The setup and management scripts use a modular library system located in `scripts/lib/`:
 
 **Core libraries:**
+
 - `common.sh`: Logging, color output, error handling, utilities
 - `docker.sh`: Docker compose wrappers, container management, health checks
 - `prerequisites.sh`: System requirements validation
@@ -57,6 +61,7 @@ The setup and management scripts use a modular library system located in `script
 - `display.sh`: Setup completion information display
 
 **Main scripts:**
+
 - `setup.sh`: Initial setup and configuration (always recreates containers)
 - `manage.sh`: Day-to-day operations (start/stop/logs/status)
 - `backup.sh`: Backup orchestration
@@ -68,6 +73,7 @@ When modifying functionality, identify which library module contains the relevan
 ## Common Commands
 
 ### Initial Setup
+
 ```bash
 ./scripts/setup.sh              # Full setup (recreates containers)
 ./scripts/setup.sh prereq       # Check prerequisites only
@@ -77,6 +83,7 @@ When modifying functionality, identify which library module contains the relevan
 ```
 
 ### Service Management
+
 ```bash
 ./scripts/manage.sh status      # Show service status and health
 ./scripts/manage.sh logs n8n    # View n8n logs
@@ -89,6 +96,7 @@ When modifying functionality, identify which library module contains the relevan
 ```
 
 ### Ollama Model Management
+
 ```bash
 ./scripts/manage.sh models                      # List installed models
 ./scripts/manage.sh pull llama3.1:8b           # Download specific model
@@ -96,6 +104,7 @@ When modifying functionality, identify which library module contains the relevan
 ```
 
 ### Workflow Management
+
 ```bash
 ./scripts/manage.sh import-workflows   # Import workflow JSON files to n8n
 ./scripts/manage.sh export-workflows   # Export n8n workflows to files
@@ -105,6 +114,7 @@ When modifying functionality, identify which library module contains the relevan
 Workflows are stored in `workflows/*.json` and can be imported/exported using the n8n CLI. The workflow management functions require n8n to be running.
 
 ### Execution Logs
+
 ```bash
 ./scripts/manage.sh exec-latest                     # Show latest execution
 ./scripts/manage.sh exec-history 20                 # Show last N executions
@@ -117,6 +127,7 @@ Workflows are stored in `workflows/*.json` and can be imported/exported using th
 Query workflow execution history directly from PostgreSQL. Useful for monitoring performance, debugging failures, and analyzing workflow runs without manual database access.
 
 ### Execution Data Analysis
+
 ```bash
 # Extract raw execution data
 ./scripts/manage.sh exec-data 191                   # Output to stdout
@@ -136,6 +147,7 @@ Query workflow execution history directly from PostgreSQL. Useful for monitoring
 Advanced execution data analysis for investigating workflow failures, debugging LLM parsing issues, and extracting detailed node outputs. The parser handles n8n's compressed JSON reference format automatically.
 
 **Use cases:**
+
 - Investigate LLM parsing failures (e.g., workflow 191 investigation)
 - Extract specific node outputs for analysis
 - Validate JSON responses from AI nodes
@@ -154,6 +166,7 @@ The project includes specialized Claude Code slash commands for comprehensive wo
 ```
 
 **Investigation features:**
+
 - **Comprehensive analysis**: Performance, data quality, model verification, root cause identification
 - **Automated reporting**: Generates markdown reports saved to `docs/investigations/`
 - **Actionable recommendations**: Prioritized fixes with code examples and impact estimates
@@ -163,6 +176,7 @@ The project includes specialized Claude Code slash commands for comprehensive wo
 **When to use:**
 
 Use `/investigate` for:
+
 - Workflow failures or unexpected behavior
 - Performance degradation (execution took unusually long)
 - Data quality issues (parsing failures, empty outputs)
@@ -170,11 +184,13 @@ Use `/investigate` for:
 - Before/after optimization to establish baselines
 
 Use `/diagnose-workflow` for:
+
 - Quick health check of latest execution
 - Fast triage without full report
 - Determining if detailed investigation is needed
 
 **Investigation reports include:**
+
 - Executive summary with key findings
 - Detailed performance and data quality analysis
 - Model performance assessment
@@ -184,6 +200,7 @@ Use `/diagnose-workflow` for:
 - Testing recommendations and expected impact
 
 **Example workflow:**
+
 ```bash
 # Check latest execution quickly
 /diagnose-workflow
@@ -202,9 +219,11 @@ cat docs/investigations/2025-10-30-workflow-194-*.md
 See `docs/investigation-system.md` for complete documentation and examples.
 
 **Existing investigation reports:**
+
 - `docs/investigations/2025-10-29-workflow-191-llm-parsing-failures.md` - LLM JSON parsing issues
 
 ### Backup & Restore
+
 ```bash
 ./scripts/backup.sh                    # Create full backup
 ./scripts/restore.sh <backup-file>     # Restore from backup
@@ -213,6 +232,7 @@ See `docs/investigation-system.md` for complete documentation and examples.
 Backups include PostgreSQL databases, n8n data, Ollama models list, and configuration files.
 
 ### Docker Compose
+
 ```bash
 docker compose up -d                         # Start services
 docker compose down                          # Stop services
@@ -226,24 +246,28 @@ Use profiles to enable optional services: `tailscale`, `redis`, `watchtower`.
 ## Development Workflow
 
 ### Modifying Docker Configuration
+
 1. Edit `docker-compose.yml`
 2. Update `.env.example` if adding new environment variables
 3. Run `./scripts/setup.sh` to recreate containers (setup always forces recreation)
 4. Verify changes with `./scripts/manage.sh status` and `./scripts/manage.sh health`
 
 ### Modifying Scripts
+
 1. Identify the correct library module in `scripts/lib/`
 2. Edit the function in the library file
 3. Test by running the relevant script command
 4. Use `./scripts/manage.sh diagnose` to verify system health
 
 ### Adding New Workflows
+
 1. Create workflow in n8n UI (https://localhost:8443)
 2. Run `./scripts/manage.sh export-workflows` to export to `workflows/*.json`
 3. Commit the JSON files to version control
 4. Import on other systems with `./scripts/manage.sh import-workflows`
 
 ### Testing LLM Integration
+
 1. Ensure Ollama is running: `./scripts/manage.sh status`
 2. List available models: `./scripts/manage.sh models`
 3. Download model if needed: `./scripts/manage.sh pull llama3.1:8b`
@@ -263,12 +287,14 @@ Use profiles to enable optional services: `tailscale`, `redis`, `watchtower`.
 ## Environment Variables
 
 Required variables (in `.env`):
+
 - `POSTGRES_PASSWORD` - PostgreSQL database password
 - `N8N_PASSWORD` - n8n basic auth password
 - `N8N_ENCRYPTION_KEY` - 32-character encryption key for n8n
 - `TELEGRAM_BOT_TOKEN` - Telegram bot token (from @BotFather)
 
 Optional variables:
+
 - `NOTION_API_TOKEN` - Notion integration token
 - `GMAIL_CLIENT_ID`, `GMAIL_CLIENT_SECRET`, `GMAIL_REFRESH_TOKEN` - Gmail OAuth2
 - `TAILSCALE_AUTH_KEY` - Tailscale authentication key
@@ -279,26 +305,31 @@ See `.env.example` for complete list.
 ## Troubleshooting
 
 ### n8n Not Starting
+
 - Check PostgreSQL health: `docker compose logs postgres`
 - Verify encryption key is exactly 32 characters
 - Check volume permissions: `./scripts/manage.sh diagnose`
 
 ### Ollama Out of Memory
+
 - Reduce model size or use quantized models
 - Adjust memory limits in docker-compose.yml (currently 14GB limit, 4GB reservation)
 - Check available RAM: `./scripts/manage.sh diagnose system`
 
 ### Long-Running LLM Timeouts
+
 - Verify patch loaded: check n8n logs for `[patch]` messages (HTTP server, axios, global fetch, undici)
 - Increase timeout values in docker-compose.yml environment variables
 - For Ollama-specific issues, check `FETCH_BODY_TIMEOUT` and `OLLAMA_REQUEST_TIMEOUT`
 
 ### Workflow Import/Export Failures
+
 - Ensure n8n is running: `./scripts/manage.sh status`
 - Test credentials: `./scripts/manage.sh test-workflows`
 - Check n8n API is accessible: `curl -u admin:password http://localhost:8443/api/v1/workflows`
 
 ### External Webhook Access
+
 - Ensure Tailscale is installed and connected
 - Run `./scripts/setup.sh funnel` to enable external access
 - Check funnel status: `./scripts/setup.sh funnel-status`
@@ -306,6 +337,7 @@ See `.env.example` for complete list.
 ## Platform-Specific Notes
 
 ### Raspberry Pi 5
+
 - **This project uses a Raspberry Pi 5 with 16GB RAM**
 - Recommended models: `llama3.2:1b` (4GB), `llama3.1:8b` (8GB), `qwen2.5:14b` (16GB), `qwen2.5:32b` (20GB)
 - With 16GB RAM, you can run larger models like qwen2.5:14b comfortably
@@ -313,6 +345,7 @@ See `.env.example` for complete list.
 - Use `OLLAMA_NUM_PARALLEL=1` and `OLLAMA_MAX_LOADED_MODELS=1` to prevent OOM
 
 ### macOS (Apple Silicon)
+
 - Excellent performance with any models
 - Ollama uses Metal acceleration automatically
 - SSL certificates work with system keychain
