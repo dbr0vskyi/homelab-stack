@@ -12,33 +12,43 @@ Investigate the specified workflow execution with forensic-level detail, identif
 
 1. **Get execution details** using `./scripts/manage.sh exec-details <execution_id>`
 2. **Analyze LLM responses** using `./scripts/manage.sh exec-llm <execution_id>`
+   - This command now extracts and displays the **model used** during execution
+   - Model information is shown in the summary and saved to the analysis file
 3. **Parse execution data** using `./scripts/manage.sh exec-parse <execution_id>`
 4. **Extract raw data** using `./scripts/manage.sh exec-data <execution_id> /tmp/exec-<id>-data.json`
 5. **Get execution history** using `./scripts/manage.sh exec-history 10` for context
-6. **Gather monitoring data** (temperature, CPU, memory during execution):
-   - Extract execution start/end timestamps from exec-details
-   - Query Prometheus for temperature history during execution
-   - Query system metrics (CPU, memory, throttling events)
-   - Correlate thermal events with workflow phases
+6. **Gather monitoring data** using `./scripts/manage.sh exec-monitoring <execution_id>`
+   - **IMPORTANT**: ALWAYS use this script command, NOT curl directly to Prometheus
+   - This command automatically extracts timestamps and queries system metrics
+   - Provides temperature, CPU utilization, memory usage, and throttling status
+   - All data is properly formatted and correlated with execution phases
 
 ### Phase 2: Model Verification
 
-**CRITICAL**: Always verify which model was actually used during execution:
+**CRITICAL**: The model used during execution is now automatically extracted!
 
-1. Check the workflow file for configured model:
+1. **Check exec-llm output** - The model is displayed in the summary:
+   ```
+   Model(s) Used:    llama3.2:3b
+   ```
+   - This shows the ACTUAL model used during execution (not the configured default)
+   - If multiple models were used, all will be listed
+
+2. **Compare with workflow configuration** (optional):
    ```bash
    grep -A 5 '"name": "model"' workflows/<workflow-name>.json
    ```
+   - This shows the default/configured model in the workflow file
 
-2. Check installed models:
+3. **Verify model capabilities**:
    ```bash
    ./scripts/manage.sh models
    ```
+   - Check if the model is installed and appropriate for the task
 
-3. **ASK THE USER**: "Was the model changed via the n8n UI during this execution?"
-   - If yes, ask which model was actually used
-   - Document the model change in your findings
-   - Note that UI changes override workflow configuration
+4. **If model mismatch detected**: Document the discrepancy
+   - Note if the exec-llm model differs from workflow configuration
+   - This may indicate a UI change or configuration drift
 
 ### Phase 3: Analysis Framework
 

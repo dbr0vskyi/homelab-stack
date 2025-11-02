@@ -65,16 +65,20 @@ def extract_llm_responses(data, validate=False):
             if not isinstance(exec_data, dict):
                 continue
 
-            # Extract response
-            response = extract_response_from_execution(data, exec_data)
+            # Extract response and metadata
+            extraction = extract_response_from_execution(data, exec_data)
 
-            if response:
+            if extraction:
+                response = extraction['response']
+                model = extraction.get('model')
+
                 response_data = {
                     'node': node_name,
                     'executionIndex': exec_data.get('executionIndex', exec_idx),
                     'executionTime': exec_data.get('executionTime'),
                     'response': response,
-                    'responseLength': len(str(response))
+                    'responseLength': len(str(response)),
+                    'model': model
                 }
 
                 # Validate JSON if requested
@@ -88,7 +92,7 @@ def extract_llm_responses(data, validate=False):
 
 
 def extract_response_from_execution(data, exec_data):
-    """Extract response from a single execution."""
+    """Extract response and metadata from a single execution."""
     try:
         # Navigate: exec_data -> data -> main -> [items] -> json -> response
         data_ref = exec_data.get('data')
@@ -129,15 +133,29 @@ def extract_response_from_execution(data, exec_data):
         if not isinstance(json_obj, dict):
             return None
 
-        # Try multiple possible response fields
+        # Extract response
+        response = None
         for field in ['response', 'output', 'text', 'content']:
             response_ref = json_obj.get(field)
             if response_ref:
                 response = resolve_ref(data, response_ref)
                 if response:
-                    return response
+                    break
 
-        return None
+        if not response:
+            return None
+
+        # Extract model information (if available)
+        model = None
+        model_ref = json_obj.get('model')
+        if model_ref:
+            model = resolve_ref(data, model_ref)
+
+        # Return dict with response and metadata
+        return {
+            'response': response,
+            'model': model
+        }
 
     except Exception as e:
         print(f"Error extracting response: {e}", file=sys.stderr)

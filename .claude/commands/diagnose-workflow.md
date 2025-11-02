@@ -12,9 +12,12 @@ Provide fast triage and immediate guidance for workflow problems. This is the li
 
 1. **Get latest execution**: `./scripts/manage.sh exec-latest`
 2. **If specific execution provided**: `./scripts/manage.sh exec-details <id>`
-3. **Check for failures**: `./scripts/manage.sh exec-failed 5`
-4. **Quick stats**: `./scripts/manage.sh exec-stats`
-5. **Get monitoring data**: `./scripts/manage.sh exec-monitoring <id>` (temperature, CPU, memory)
+3. **Check LLM analysis**: `./scripts/manage.sh exec-llm <id>` (includes model used)
+4. **Check for failures**: `./scripts/manage.sh exec-failed 5`
+5. **Quick stats**: `./scripts/manage.sh exec-stats`
+6. **Get monitoring data**: `./scripts/manage.sh exec-monitoring <id>`
+   - **IMPORTANT**: Use this script, NOT curl to Prometheus
+   - Provides temperature, CPU, memory, throttling data
 
 ### Rapid Analysis Points
 
@@ -37,12 +40,13 @@ Provide a **concise terminal summary** (no markdown file):
 
 Execution: 194 | gmail-to-telegram
 Status: ✅ Success | Duration: 46.4 min
+Model Used: llama3.1:8b
 Issue: ⚠️ SLOW - 4x longer than average
 
 Quick Findings:
   • LLM processing: 46 min (expected ~10 min)
   • JSON parsing: 100% success ✅
-  • Model: llama3.1:8b (good choice)
+  • Model: llama3.1:8b (appropriate for task)
   • Bottleneck: Raw HTML input (127KB)
 
 System Health:

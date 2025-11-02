@@ -492,11 +492,15 @@ analyze_llm_responses() {
     local valid=$(echo "$llm_data" | jq '[.[] | select(.validation.valid == true)] | length' 2>/dev/null)
     local invalid=$(echo "$llm_data" | jq '[.[] | select(.validation.valid == false)] | length' 2>/dev/null)
 
+    # Extract model information
+    local models=$(echo "$llm_data" | jq -r '[.[].model | select(. != null)] | unique | join(", ")' 2>/dev/null)
+
     echo "═══════════════════════════════════════════════════════════════"
     echo "LLM Response Analysis Summary"
     echo "═══════════════════════════════════════════════════════════════"
     echo "Execution ID:     $execution_id"
     [[ -n "$workflow_name" ]] && echo "Workflow:         $workflow_name"
+    [[ -n "$models" ]] && echo "Model(s) Used:    $models"
     echo "Total Responses:  $total"
     echo "Valid JSON:       $valid ($(awk "BEGIN {printf \"%.1f\", ($valid/$total)*100}")%)"
     echo "Invalid JSON:     $invalid ($(awk "BEGIN {printf \"%.1f\", ($invalid/$total)*100}")%)"
