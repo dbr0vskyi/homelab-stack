@@ -30,6 +30,10 @@ main() {
     check_prerequisites
     setup_environment
     setup_ssl_certificates
+    
+    # Enable monitoring by default
+    export ENABLE_MONITORING=true
+    
     init_volumes
     start_services true  # Force recreate containers in setup
     setup_ollama_models
@@ -109,11 +113,11 @@ case "${1:-}" in
         echo "  funnel       - Setup Tailscale funnel for n8n webhooks"
         echo "  funnel-stop  - Stop Tailscale funnel"
         echo "  funnel-status- Show Tailscale funnel status"
-        echo "  monitoring   - Setup monitoring stack (Prometheus + Grafana)"
+        echo "  monitoring   - Setup monitoring stack only (Prometheus + Grafana)"
         echo "  info         - Show setup information"
         echo "  help         - Show this help message"
         echo ""
-        echo "Run without arguments for full setup."
+        echo "Run without arguments for full setup (includes monitoring)."
         exit 0
         ;;
     *)

@@ -2,18 +2,23 @@
 
 Prometheus + Grafana + thermal monitoring for performance tracking and thermal management.
 
+**Note**: Monitoring is now included by default in the main setup process.
+
 ## Deployment
 
-Deploy the complete monitoring stack:
+The monitoring stack is automatically deployed during standard setup:
 
 ```bash
-# Method 1: Via setup script
+# Standard setup (includes monitoring by default)
+./scripts/setup.sh
+
+# Separate monitoring setup (if needed)
 ./scripts/setup.sh monitoring
 
-# Method 2: Via deploy script
+# Alternative via deploy script
 ./scripts/deploy-monitoring.sh
 
-# Method 3: Enable in .env then full setup
+# Manual enable in .env then setup
 echo "ENABLE_MONITORING=true" >> .env
 ./scripts/setup.sh
 ```

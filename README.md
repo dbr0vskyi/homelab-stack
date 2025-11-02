@@ -15,7 +15,7 @@ Self-hosted automation platform for Raspberry Pi 5/macOS. Automate workflows wit
 - **n8n** - Workflow automation platform
 - **PostgreSQL** - Reliable database backend
 - **Ollama** - Local LLM inference
-- **Prometheus + Grafana** - Monitoring and thermal tracking (optional)
+- **Prometheus + Grafana** - Monitoring and thermal tracking
 - **Tailscale** - Zero-trust network access (optional)
 
 ## 🚀 Quick Start
@@ -45,9 +45,8 @@ nano .env  # Add your tokens
 ./scripts/manage.sh exec-latest     # Show workflow executions
 ./scripts/backup.sh                 # Create backup
 
-# Optional monitoring
-./scripts/setup.sh monitoring       # Install monitoring stack
-./scripts/manage.sh monitoring-*    # Monitoring commands
+# Monitoring commands (included by default)
+./scripts/manage.sh monitoring-*    # Monitoring management commands
 
 # External access
 ./scripts/setup.sh funnel          # Enable external webhooks

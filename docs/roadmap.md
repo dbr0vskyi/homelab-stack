@@ -27,7 +27,7 @@ Implement a lightweight monitoring and logging stack optimized for Raspberry Pi 
 
 - **Metrics Collection:** Prometheus + Node Exporter + thermal-exporter
 - **Visualization:** Grafana with Pi-optimized dashboards
-- **Quick Setup:** `./scripts/deploy-monitoring.sh` or `./scripts/setup.sh monitoring`
+- **Quick Setup:** Included by default in `./scripts/setup.sh` or `./scripts/deploy-monitoring.sh`
 - **Management:** `./scripts/manage.sh monitoring-*` commands
 
 **Files Modified:**
