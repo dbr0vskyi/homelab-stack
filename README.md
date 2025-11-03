@@ -74,30 +74,27 @@ Run any script without arguments to see all options.
 - [🖥️ **Hardware Optimization**](docs/hardware-setup.md) - Platform-specific tuning
 - [📊 **Monitoring Setup**](docs/monitoring.md) - Thermal monitoring and performance tracking
 
-## � Long-Running LLM Calls
+## ⏱ Long-Running LLM Calls
 
-This stack includes a timeout patch to enable AI Agent nodes with long-running LLM calls (>5 minutes). The default Node.js and undici timeouts are too restrictive for complex AI processing.
+**Current Approach**: All workflows use the **HTTP Request node** to communicate directly with self-hosted Ollama at `http://ollama:11434/api/generate`.
 
-**Solution Applied**: [n8n-timeout-patch](https://github.com/Piggeldi2013/n8n-timeout-patch) by [@Piggeldi2013](https://github.com/Piggeldi2013)
+**Why HTTP Request instead of AI Agent?**
 
-**How it works**:
+On Raspberry Pi, LLM inference can take several minutes for complex prompts. The HTTP Request node provides:
 
-- Patches Node.js HTTP server timeouts (inbound requests)
-- Configures undici global dispatcher (outbound API calls to LLMs)
-- Preloaded via `NODE_OPTIONS=--require /patch/patch-http-timeouts.js`
+- **Flexible timeout control**: Set explicit timeouts per request (e.g., `"timeout": 3600000` for 1 hour)
+- **Direct API access**: Full control over Ollama parameters (temperature, top_p, repeat_penalty, num_threads)
+- **Predictable behavior**: No abstraction layers that might interfere with long-running calls
 
-**Timeout Configuration**:
+**AI Agent Node Status**: Support for AI Agent is not currently a top priority, but will be considered for future iterations. Several approaches were attempted with only partial success due to timeout configuration limitations in AI Agent's architecture when working with self-hosted LLMs.
+
+**Timeout Patch**: The stack includes [n8n-timeout-patch](https://github.com/Piggeldi2013/n8n-timeout-patch) to extend global timeout limits, ensuring workflows don't terminate during long LLM operations:
 
 - **Workflow execution**: 12 hours (`N8N_WORKFLOW_TIMEOUT=43200`)
-- **LLM headers response**: 3 hours (`FETCH_HEADERS_TIMEOUT=10800000`)
+- **LLM response headers**: 3 hours (`FETCH_HEADERS_TIMEOUT=10800000`)
 - **LLM body streaming**: 12 hours (`FETCH_BODY_TIMEOUT=43200000`)
 
-**Files**:
-
-- `config/n8n/patch-http-timeouts.js` - Timeout patch script
-- Environment variables in `docker-compose.yml` - Timeout configuration
-
-**Verification**: Check logs for `[patch] undici dispatcher set` and `[patch] http server timeouts` messages.
+**Example**: See `workflows/gmail-to-telegram.json` node "Summarise Email with LLM" for HTTP Request configuration with Ollama.
 
 ## �🚨 Troubleshooting
 
