@@ -6,7 +6,8 @@
 set -e
 
 # Get script directory and source library modules
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+MANAGE_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="$MANAGE_SCRIPT_DIR"
 LIB_DIR="${SCRIPT_DIR}/lib"
 
 # Source all required library modules
@@ -18,6 +19,9 @@ source "${LIB_DIR}/workflows.sh"
 source "${LIB_DIR}/executions.sh"
 source "${LIB_DIR}/monitoring.sh"
 source "${LIB_DIR}/wifi.sh"
+
+# Restore SCRIPT_DIR after sourcing libraries (wifi.sh overwrites it)
+SCRIPT_DIR="$MANAGE_SCRIPT_DIR"
 
 # Show help
 show_help() {

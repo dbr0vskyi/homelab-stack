@@ -62,9 +62,10 @@ get_wifi_status() {
     if is_networkmanager_available; then
         local status=$(nmcli -t -f STATE general status)
         local connection=$(nmcli -t -f NAME connection show --active | grep -v "^$" | head -1)
-        
+
         case "$status" in
-            "connected (global)")
+            "connected (global)"|"connected")
+                # Both old format "connected (global)" and new format "connected" indicate full connectivity
                 echo "CONNECTED:$connection"
                 return 0
                 ;;
