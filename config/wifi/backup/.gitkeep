@@ -1,0 +1,11 @@
+# Backup configuration files are stored here
+# Files are automatically created by the WiFi management scripts
+
+# Format: wifi-backup-YYYYMMDD-HHMMSS.json
+# Contains NetworkManager connection profiles and settings
+
+# Backups include:
+# - Connection names and SSIDs
+# - Security settings (passwords are encrypted)
+# - Priority and auto-connect settings
+# - IP configuration preferences

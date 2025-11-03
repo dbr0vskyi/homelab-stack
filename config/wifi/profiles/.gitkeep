@@ -1,0 +1,11 @@
+# Sample network profile configurations
+# These can be used as quick setup templates for common scenarios
+
+# Each profile contains connection settings for different environments:
+# - Home network (primary residence)
+# - Office network (work environment)  
+# - Mobile hotspot (emergency connectivity)
+# - Public WiFi (coffee shops, hotels, etc.)
+
+# Profiles are referenced by the WiFi management scripts for quick setup
+# and can be used to restore standard configurations after network changes

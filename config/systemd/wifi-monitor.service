@@ -1,0 +1,52 @@
+[Unit]
+Description=WiFi Connectivity Monitor for Homelab Stack
+Documentation=https://github.com/dbr0vskyi/homelab-stack
+After=NetworkManager.service network.target
+Wants=NetworkManager.service
+BindsTo=network.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/opt/homelab-stack
+ExecStart=/opt/homelab-stack/scripts/wifi-monitor.sh start
+ExecStop=/opt/homelab-stack/scripts/wifi-monitor.sh stop
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=always
+RestartSec=10
+KillMode=process
+TimeoutStopSec=30
+
+# Environment variables
+Environment=DAEMON_MODE=true
+Environment=WIFI_MONITOR_INTERVAL=30
+Environment=WIFI_FAILURE_THRESHOLD=3
+Environment=WIFI_RECOVERY_COOLDOWN=300
+Environment=WIFI_DEBUG=false
+
+# Security settings
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/log/homelab /opt/homelab-stack /var/run
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectKernelModules=false
+ProtectControlGroups=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+
+# Resource limits
+LimitNOFILE=1024
+LimitNPROC=512
+MemoryMax=100M
+CPUQuota=25%
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=wifi-monitor
+
+[Install]
+WantedBy=multi-user.target

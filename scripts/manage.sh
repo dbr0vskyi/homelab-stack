@@ -17,6 +17,7 @@ source "${LIB_DIR}/ollama.sh"
 source "${LIB_DIR}/workflows.sh"
 source "${LIB_DIR}/executions.sh"
 source "${LIB_DIR}/monitoring.sh"
+source "${LIB_DIR}/wifi.sh"
 
 # Show help
 show_help() {
@@ -65,6 +66,17 @@ Commands:
   exec-llm <id>              Analyze LLM responses with JSON validation
   exec-monitoring <id>       Get monitoring data (temp, CPU, memory) for execution
 
+  WiFi Management:
+  wifi-status                Show current WiFi connection status
+  wifi-scan                  Scan for available WiFi networks
+  wifi-connect               Interactive WiFi connection setup
+  wifi-recovery              Perform WiFi connectivity recovery
+  wifi-monitor-start         Start WiFi monitoring daemon
+  wifi-monitor-stop          Stop WiFi monitoring daemon
+  wifi-monitor-status        Show WiFi monitor daemon status
+  wifi-backup                Backup WiFi configurations
+  wifi-diagnostics           Run comprehensive WiFi diagnostics
+
   Diagnostic Tools:
   diagnose                   Universal environment diagnostic tool
   diagnose [mode]            Specific diagnostic mode (system/database/n8n/etc)
@@ -89,6 +101,10 @@ Examples:
   $0 diagnose                        # Full system diagnostic
   $0 diagnose database               # Database analysis only
   $0 diagnose summary                # Quick system summary
+  $0 wifi-status                     # Show WiFi connection status
+  $0 wifi-connect                    # Connect to WiFi interactively
+  $0 wifi-recovery                   # Fix WiFi connectivity issues
+  $0 wifi-monitor-start              # Start WiFi monitoring daemon
 EOF
 }
 
@@ -338,6 +354,33 @@ case "${1:-}" in
         ;;
     "thermal-test")
         exec "${SCRIPT_DIR}/test-thermal-monitoring.sh"
+        ;;
+    "wifi-status")
+        get_wifi_status
+        ;;
+    "wifi-scan")
+        scan_wifi_networks
+        ;;
+    "wifi-connect")
+        exec "${SCRIPT_DIR}/wifi-recovery.sh" connect
+        ;;
+    "wifi-recovery")
+        exec "${SCRIPT_DIR}/wifi-recovery.sh" recovery
+        ;;
+    "wifi-monitor-start")
+        exec "${SCRIPT_DIR}/wifi-monitor.sh" start
+        ;;
+    "wifi-monitor-stop")
+        exec "${SCRIPT_DIR}/wifi-monitor.sh" stop
+        ;;
+    "wifi-monitor-status")
+        exec "${SCRIPT_DIR}/wifi-monitor.sh" status
+        ;;
+    "wifi-backup")
+        exec "${SCRIPT_DIR}/wifi-recovery.sh" backup
+        ;;
+    "wifi-diagnostics")
+        exec "${SCRIPT_DIR}/wifi-recovery.sh" diagnostics
         ;;
     "help"|"-h"|"--help")
         show_help
