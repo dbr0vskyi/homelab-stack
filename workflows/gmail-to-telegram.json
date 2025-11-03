@@ -265,6 +265,86 @@
           "name": "Emails Summary Bot"
         }
       }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "start-timestamp",
+              "name": "startTime",
+              "type": "string",
+              "value": "={{ new Date().toISOString() }}"
+            },
+            {
+              "id": "start-timestamp-ms",
+              "name": "startTimeMs",
+              "type": "number",
+              "value": "={{ Date.now() }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "add-start-timestamp",
+      "name": "Add Start Timestamp",
+      "type": "n8n-nodes-base.set",
+      "position": [1360, 560],
+      "typeVersion": 3.4
+    },
+    {
+      "parameters": {
+        "chatId": "={{ 219678893 }}",
+        "text": "=⏳ Processing email...\n📬 From: {{ $json.fromName }}\n📝 Subject: {{ $json.subject }}\n🤖 Model: qwen2.5:7b",
+        "additionalFields": {
+          "appendAttribution": false,
+          "disable_notification": true
+        }
+      },
+      "id": "notify-processing-started",
+      "name": "Notify Processing Started",
+      "type": "n8n-nodes-base.telegram",
+      "position": [1504, 560],
+      "webhookId": "notify-start-webhook",
+      "typeVersion": 1.2,
+      "credentials": {
+        "telegramApi": {
+          "id": "h7RbmzMEg5YYOgNt",
+          "name": "Emails Summary Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Calculate processing metrics after LLM response\nconst items = $input.all();\n\nreturn items.map(item => {\n  const startTimeMs = item.json.startTimeMs;\n  const endTimeMs = Date.now();\n  const durationMs = endTimeMs - startTimeMs;\n  const durationSec = Math.round(durationMs / 1000);\n  const durationMin = (durationSec / 60).toFixed(2);\n  \n  // Extract LLM metrics from response\n  const llmResponse = item.json.response || '';\n  const promptTokens = item.json.prompt_eval_count || 0;\n  const outputTokens = item.json.eval_count || 0;\n  const totalTokens = promptTokens + outputTokens;\n  \n  // Format duration for display\n  let durationDisplay;\n  if (durationSec < 60) {\n    durationDisplay = `${durationSec}s`;\n  } else if (durationSec < 3600) {\n    durationDisplay = `${durationMin}m`;\n  } else {\n    const hours = Math.floor(durationSec / 3600);\n    const mins = Math.floor((durationSec % 3600) / 60);\n    durationDisplay = `${hours}h ${mins}m`;\n  }\n  \n  return {\n    json: {\n      ...item.json,\n      durationMs,\n      durationSec,\n      durationMin,\n      durationDisplay,\n      promptTokens,\n      outputTokens,\n      totalTokens\n    }\n  };\n});"
+      },
+      "id": "calculate-metrics",
+      "name": "Calculate Metrics",
+      "type": "n8n-nodes-base.code",
+      "position": [1648, 560],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "chatId": "={{ 219678893 }}",
+        "text": "=✅ Completed processing\n📬 From: {{ $json.fromName }}\n📝 Subject: {{ $json.subject }}\n⏱️ Duration: {{ $json.durationDisplay }}\n🔢 Tokens: {{ $json.promptTokens }} prompt + {{ $json.outputTokens }} output = {{ $json.totalTokens }} total",
+        "additionalFields": {
+          "appendAttribution": false,
+          "disable_notification": true
+        }
+      },
+      "id": "notify-processing-complete",
+      "name": "Notify Processing Complete",
+      "type": "n8n-nodes-base.telegram",
+      "position": [1792, 560],
+      "webhookId": "notify-complete-webhook",
+      "typeVersion": 1.2,
+      "credentials": {
+        "telegramApi": {
+          "id": "h7RbmzMEg5YYOgNt",
+          "name": "Emails Summary Bot"
+        }
+      }
     }
   ],
   "pinData": {},
@@ -345,6 +425,28 @@
         ],
         [
           {
+            "node": "Add Start Timestamp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Add Start Timestamp": {
+      "main": [
+        [
+          {
+            "node": "Notify Processing Started",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify Processing Started": {
+      "main": [
+        [
+          {
             "node": "Summarise Email with LLM",
             "type": "main",
             "index": 0
@@ -353,6 +455,28 @@
       ]
     },
     "Summarise Email with LLM": {
+      "main": [
+        [
+          {
+            "node": "Calculate Metrics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate Metrics": {
+      "main": [
+        [
+          {
+            "node": "Notify Processing Complete",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify Processing Complete": {
       "main": [
         [
           {
