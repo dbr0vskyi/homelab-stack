@@ -69,7 +69,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Single Code node: per-email Telegram messages + final daily summary\n// Uses ONLY the JSON inside `response` for each input item.\n\n// Return type matches n8n's N8nOutputItems interface\n// Each item should have: { json: Object, binary?: Object }\n\n// ---------- helpers ----------\n\n/**\n * Extracts JSON object from LLM response with robust parsing\n * Handles various formats: plain JSON, markdown code blocks, mixed text\n * @param {*} rawResponse - The raw response from LLM\n * @returns {Object} Parsed JSON object or empty object on failure\n */\nfunction extractJsonFromResponse(rawResponse) {\n  if (rawResponse == null) return {};\n  if (typeof rawResponse === \"object\") return rawResponse;\n  if (typeof rawResponse !== \"string\") return {};\n\n  // Try direct JSON parse first (fastest path)\n  try {\n    return JSON.parse(rawResponse);\n  } catch {\n    // Continue to more complex extraction methods\n  }\n\n  const response = rawResponse.trim();\n\n  // Method 1: Extract from markdown code blocks with optional language\n  const codeBlockRegex = /```(?:json)?\\s*(\\{[\\s\\S]*?\\})\\s*```/i;\n  const codeBlockMatch = response.match(codeBlockRegex);\n  if (codeBlockMatch) {\n    try {\n      return JSON.parse(codeBlockMatch[1]);\n    } catch (e) {\n      console.warn(`Failed to parse JSON from code block: ${e.message}`);\n    }\n  }\n\n  // Method 2: Extract first JSON-like object from response\n  const jsonObjectRegex = /(\\{(?:[^{}]|{[^{}]*})*\\})/;\n  const jsonMatch = response.match(jsonObjectRegex);\n  if (jsonMatch) {\n    try {\n      return JSON.parse(jsonMatch[1]);\n    } catch (e) {\n      console.warn(`Failed to parse extracted JSON: ${e.message}`);\n    }\n  }\n\n  // Method 3: Look for JSON after common LLM prefixes\n  const commonPrefixes = [\n    \"Here is the JSON output based on the provided email:\",\n    \"Here is the JSON output:\",\n    \"The JSON output:\",\n    \"```json\",\n    \"```\",\n    \"Output:\",\n    \"Result:\",\n  ];\n\n  for (const prefix of commonPrefixes) {\n    const index = response.toLowerCase().indexOf(prefix.toLowerCase());\n    if (index !== -1) {\n      const afterPrefix = response.substring(index + prefix.length).trim();\n      const prefixJsonMatch = afterPrefix.match(jsonObjectRegex);\n      if (prefixJsonMatch) {\n        try {\n          return JSON.parse(prefixJsonMatch[1]);\n        } catch (e) {\n          continue;\n        }\n      }\n    }\n  }\n\n  console.warn(\n    `Could not extract valid JSON from LLM response. Response preview: ${response.substring(\n      0,\n      100\n    )}...`\n  );\n  return {};\n}\n\n/**\n * Legacy function for backward compatibility\n * @deprecated Use extractJsonFromResponse instead\n */\nfunction toObj(r) {\n  return extractJsonFromResponse(r);\n}\n\n/**\n * Cleans and normalizes sender name from email\n * Removes email addresses in angle brackets and pipe-separated domains\n * @param {string} senderName - Raw sender name from email\n * @returns {string} Cleaned sender name\n */\nfunction cleanFromName(senderName) {\n  if (!senderName) return \"Unknown sender\";\n\n  let cleaned = String(senderName).trim();\n\n  // Remove email address in angle brackets: \"John Doe <john@example.com>\"\n  if (cleaned.includes(\"<\")) {\n    cleaned = cleaned.split(\"<\")[0].trim();\n  }\n\n  // Remove domain after pipe: \"John Doe | Example.com\"\n  if (cleaned.includes(\"|\")) {\n    cleaned = cleaned.split(\"|\")[0].trim();\n  }\n\n  // Remove surrounding quotes\n  cleaned = cleaned.replace(/^[\"']|[\"']$/g, \"\");\n\n  return cleaned || \"Unknown sender\";\n}\n\n/**\n * Formats action items into markdown list with proper link handling\n * @param {Array<string|Object>} actions - Array of action items\n * @returns {string} Formatted actions block or empty string\n */\nfunction formatActions(actions) {\n  if (!Array.isArray(actions) || actions.length === 0) {\n    return \"\";\n  }\n\n  const URL_REGEX = /https?:\\/\\/\\S+/;\n\n  const formattedActions = actions\n    .map((action) => {\n      if (typeof action === \"string\") {\n        return formatStringAction(action, URL_REGEX);\n      } else if (action && typeof action === \"object\") {\n        return formatObjectAction(action);\n      }\n      return null;\n    })\n    .filter(Boolean);\n\n  return formattedActions.length > 0\n    ? `\\n\\nActions:\\n${formattedActions.join(\"\\n\")}`\n    : \"\";\n}\n\n/**\n * Formats string-based action item\n * @param {string} action - Action string (may contain \"Label: URL\" format)\n * @param {RegExp} urlRegex - URL matching regex\n * @returns {string} Formatted action item\n */\nfunction formatStringAction(action, urlRegex) {\n  // Handle \"Label: URL\" format\n  if (action.includes(\":\")) {\n    const [label, ...urlParts] = action.split(\":\");\n    const urlPart = urlParts.join(\":\").trim();\n    const urlMatch = urlPart.match(urlRegex);\n\n    if (urlMatch) {\n      return `- [${label.trim()}](${urlMatch[0]})`;\n    }\n  }\n\n  // Handle direct URL in text\n  const urlMatch = action.match(urlRegex);\n  if (urlMatch) {\n    return `- [Open link](${urlMatch[0]})`;\n  }\n\n  // Plain text action\n  return `- ${action}`;\n}\n\n/**\n * Formats object-based action item\n * @param {Object} action - Action object with label/title and url/href properties\n * @returns {string} Formatted action item\n */\nfunction formatObjectAction(action) {\n  const label = action.label || action.title || \"Open link\";\n  const url = action.url || action.href;\n\n  return url ? `- [${label}](${url})` : `- ${label}`;\n}\n\n/**\n * Validates and normalizes email data from LLM response\n * @param {Object} emailData - Raw email data object\n * @returns {Object} Validated and normalized email data\n */\nfunction validateEmailData(emailData) {\n  const defaults = {\n    isImportant: false,\n    from: \"Unknown sender\",\n    subject: \"No subject\",\n    category: \"Uncategorized\",\n    receivedDate: new Date().toISOString(),\n    gmailUrl: \"#\",\n    summary: \"No summary available\",\n    actions: [],\n  };\n\n  return {\n    isImportant: Boolean(emailData.isImportant),\n    from: cleanFromName(emailData.from || defaults.from),\n    subject: String(emailData.subject || defaults.subject),\n    category: String(emailData.category || defaults.category),\n    receivedDate: emailData.receivedDate || defaults.receivedDate,\n    gmailUrl: emailData.gmailUrl || defaults.gmailUrl,\n    summary: String(emailData.summary || defaults.summary),\n    actions: Array.isArray(emailData.actions)\n      ? emailData.actions\n      : defaults.actions,\n  };\n}\n\n/**\n * Creates formatted email message from validated data\n * @param {Object} emailData - Validated email data\n * @returns {string} Formatted message string\n */\nfunction createEmailMessage(emailData) {\n  const { from, subject, category, receivedDate, summary, actions, gmailUrl } =\n    emailData;\n  const actionsBlock = formatActions(actions);\n  const formattedDate = new Date(receivedDate).toLocaleString();\n\n  return `[${from}]: ${subject}\nCategory: ${category}\nReceived: ${formattedDate}\n\n${summary}${actionsBlock}\n\n[Open in Gmail](${gmailUrl})`;\n}\n\n// ---------- main ----------\nconst items = $input.all();\n\n// Early validation\nif (!items || !Array.isArray(items)) {\n  console.error(\"Invalid input: Expected array of items\");\n  return [\n    {\n      json: {\n        message: \"❌ Error: Invalid input data provided to email mapper\",\n        error: true,\n        isSummary: true,\n      },\n    },\n  ];\n}\n\nconst perEmailOutputs = [];\nconst aggregationStats = {\n  total: 0,\n  important: 0,\n  byCategory: new Map(), // Using Map for better performance\n  importantList: [],\n  errors: 0,\n};\n\nfor (const item of items) {\n  try {\n    // Support both AI Agent (direct JSON in .output) and HTTP Request (.response string)\n    const rawData = item?.json?.output || item?.json?.response || item?.json;\n\n    if (!rawData) {\n      console.warn(\"Skipping item with no data:\", item);\n      aggregationStats.errors++;\n      continue;\n    }\n\n    const extractedData = extractJsonFromResponse(rawData);\n    const validatedEmail = validateEmailData(extractedData);\n\n    // Update aggregation stats\n    aggregationStats.total++;\n    if (validatedEmail.isImportant) {\n      aggregationStats.important++;\n      aggregationStats.importantList.push({\n        subject: validatedEmail.subject,\n        from: validatedEmail.from,\n      });\n    }\n\n    // Track categories (using Map for better performance)\n    const currentCount =\n      aggregationStats.byCategory.get(validatedEmail.category) || 0;\n    aggregationStats.byCategory.set(validatedEmail.category, currentCount + 1);\n\n    // Create formatted message\n    const message = createEmailMessage(validatedEmail);\n\n    const outputItem = {\n      json: {\n        message,\n        isImportant: validatedEmail.isImportant,\n        subject: validatedEmail.subject,\n        from: validatedEmail.from,\n        category: validatedEmail.category,\n        receivedDate: validatedEmail.receivedDate,\n        gmailUrl: validatedEmail.gmailUrl,\n        summary: validatedEmail.summary,\n        actions: validatedEmail.actions,\n        isSummary: false,\n      },\n    };\n\n    perEmailOutputs.push(outputItem);\n  } catch (error) {\n    console.error(\"Error processing email item:\", error);\n    aggregationStats.errors++;\n    // Continue processing other emails instead of failing completely\n  }\n}\n\n/**\n * Creates daily summary message from aggregation stats\n * @param {Object} stats - Aggregation statistics\n * @returns {Object} Summary message object\n */\nfunction createDailySummary(stats) {\n  const finishedAt = new Date().toLocaleString();\n\n  // Handle no emails case\n  if (stats.total === 0) {\n    return {\n      message: \"📧 Daily Gmail scan complete — no new emails found.\",\n      totalEmails: 0,\n      importantEmails: 0,\n      byCategory: {},\n      errors: stats.errors,\n      finishedAt,\n      isSummary: true,\n    };\n  }\n\n  // Build category breakdown (convert Map to sorted array)\n  const categoryEntries = Array.from(stats.byCategory.entries())\n    .sort(([, a], [, b]) => b - a)\n    .map(([category, count]) => `• ${category}: ${count}`)\n    .join(\"\\n\");\n\n  // Build top important emails list\n  const topImportantLines = stats.importantList\n    .slice(0, 5)\n    .map((email) => `- **${email.subject}** — ${email.from}`)\n    .join(\"\\n\");\n\n  // Construct summary message\n  let summaryMessage = `📊 **Daily Gmail Summary**\n\n📧 Total emails processed: ${stats.total}\n🔴 Important emails: ${stats.important}`;\n\n  if (stats.errors > 0) {\n    summaryMessage += `\\n⚠️ Processing errors: ${stats.errors}`;\n  }\n\n  if (categoryEntries) {\n    summaryMessage += `\\n\\n**By category:**\\n${categoryEntries}`;\n  }\n\n  if (topImportantLines) {\n    summaryMessage += `\\n\\n**Top important:**\\n${topImportantLines}`;\n  }\n\n  summaryMessage += `\\n\\n✅ Individual summaries were sent above.\n\n_Scan completed at ${finishedAt}_`;\n\n  return {\n    message: summaryMessage,\n    totalEmails: stats.total,\n    importantEmails: stats.important,\n    byCategory: Object.fromEntries(stats.byCategory), // Convert Map back to object for compatibility\n    errors: stats.errors,\n    finishedAt,\n    isSummary: true,\n  };\n}\n\n// Create and append daily summary\nconst summary = createDailySummary(aggregationStats);\nconst summaryItem = {\n  json: summary,\n};\nperEmailOutputs.push(summaryItem);\n\nreturn perEmailOutputs;\n"
+        "jsCode": "// Single Code node: per-email Telegram messages + final daily summary\n// Parses text format from LLM and combines with email metadata from previous nodes\n\n// ---------- helpers ----------\n\n/**\n * Parses text response from LLM into structured data\n * @param {string} text - Raw text response from LLM\n * @returns {Object|null} Parsed data or null on failure\n */\nfunction parseTextResponse(text) {\n  if (!text || typeof text !== 'string') return null;\n  \n  const result = {\n    isImportant: false,\n    category: 'unknown',\n    summary: '',\n    actions: []\n  };\n  \n  const lines = text.trim().split('\\n');\n  let currentField = null;\n  let inActions = false;\n  \n  for (let line of lines) {\n    line = line.trim();\n    \n    // Check for end marker\n    if (line === '---') break;\n    \n    // Parse field lines\n    if (line.startsWith('Important:')) {\n      const value = line.substring('Important:'.length).trim().toLowerCase();\n      result.isImportant = value === 'yes' || value === 'true';\n      inActions = false;\n      currentField = null;\n    } else if (line.startsWith('Category:')) {\n      result.category = line.substring('Category:'.length).trim();\n      inActions = false;\n      currentField = null;\n    } else if (line.startsWith('Summary:')) {\n      result.summary = line.substring('Summary:'.length).trim();\n      currentField = 'summary';\n      inActions = false;\n    } else if (line.startsWith('Actions:')) {\n      inActions = true;\n      currentField = null;\n    } else if (inActions && line.startsWith('-')) {\n      // Parse action line\n      const action = line.substring(1).trim();\n      if (action && action.toLowerCase() !== 'none') {\n        result.actions.push(action);\n      }\n    } else if (currentField === 'summary' && line && !inActions) {\n      // Continue multi-line summary\n      result.summary += ' ' + line;\n    }\n  }\n  \n  return result;\n}\n\n/**\n * Cleans and normalizes sender name from email\n * @param {string} senderName - Raw sender name from email\n * @returns {string} Cleaned sender name\n */\nfunction cleanFromName(senderName) {\n  if (!senderName) return \"Unknown sender\";\n  \n  let cleaned = String(senderName).trim();\n  \n  // Remove email address in angle brackets\n  if (cleaned.includes(\"<\")) {\n    cleaned = cleaned.split(\"<\")[0].trim();\n  }\n  \n  // Remove domain after pipe\n  if (cleaned.includes(\"|\")) {\n    cleaned = cleaned.split(\"|\")[0].trim();\n  }\n  \n  // Remove surrounding quotes\n  cleaned = cleaned.replace(/^[\"']|[\"']$/g, \"\");\n  \n  return cleaned || \"Unknown sender\";\n}\n\n/**\n * Formats action items into markdown list with proper link handling\n * @param {Array<string>} actions - Array of action strings\n * @returns {string} Formatted actions block or empty string\n */\nfunction formatActions(actions) {\n  if (!Array.isArray(actions) || actions.length === 0) {\n    return \"\";\n  }\n  \n  const URL_REGEX = /https?:\\/\\/\\S+/;\n  \n  const formattedActions = actions\n    .map((action) => {\n      // Handle \"Label: URL\" format\n      if (action.includes(\":\")) {\n        const parts = action.split(\":\");\n        const label = parts[0].trim();\n        const rest = parts.slice(1).join(\":\").trim();\n        const urlMatch = rest.match(URL_REGEX);\n        \n        if (urlMatch) {\n          return `- [${label}](${urlMatch[0]})`;\n        }\n      }\n      \n      // Handle direct URL in text\n      const urlMatch = action.match(URL_REGEX);\n      if (urlMatch) {\n        return `- [Open link](${urlMatch[0]})`;\n      }\n      \n      // Plain text action\n      return `- ${action}`;\n    })\n    .filter(Boolean);\n  \n  return formattedActions.length > 0\n    ? `\\n\\nActions:\\n${formattedActions.join(\"\\n\")}`\n    : \"\";\n}\n\n/**\n * Creates formatted email message\n * @param {Object} data - Combined email data\n * @returns {string} Formatted message string\n */\nfunction createEmailMessage(data) {\n  const { from, subject, category, receivedDate, summary, actions, gmailUrl } = data;\n  const actionsBlock = formatActions(actions);\n  const formattedDate = new Date(receivedDate).toLocaleString();\n  \n  return `[${from}]: ${subject}\\nCategory: ${category}\\nReceived: ${formattedDate}\\n\\n${summary}${actionsBlock}\\n\\n[Open in Gmail](${gmailUrl})`;\n}\n\n// ---------- main ----------\nconst items = $input.all();\n\n// Early validation\nif (!items || !Array.isArray(items)) {\n  console.error(\"Invalid input: Expected array of items\");\n  return [\n    {\n      json: {\n        message: \"❌ Error: Invalid input data provided to email formatter\",\n        error: true,\n        isSummary: true,\n      },\n    },\n  ];\n}\n\nconst perEmailOutputs = [];\nconst aggregationStats = {\n  total: 0,\n  important: 0,\n  byCategory: new Map(),\n  importantList: [],\n  errors: 0,\n  parsingFailures: 0,\n};\n\nfor (const item of items) {\n  try {\n    // Get LLM response text\n    const llmResponse = item?.json?.response;\n    \n    if (!llmResponse) {\n      console.warn(\"Skipping item with no LLM response\");\n      aggregationStats.errors++;\n      continue;\n    }\n    \n    // Parse LLM text response\n    const parsedData = parseTextResponse(llmResponse);\n    \n    if (!parsedData) {\n      console.error(`Failed to parse LLM response. Preview: ${llmResponse.substring(0, 100)}...`);\n      aggregationStats.parsingFailures++;\n      aggregationStats.errors++;\n      continue;\n    }\n    \n    // Get email metadata from previous nodes (Map Email Fields node)\n    const emailMeta = item?.json;\n    const from = cleanFromName(emailMeta?.fromName || \"Unknown sender\");\n    const subject = emailMeta?.subject || \"No subject\";\n    const gmailUrl = emailMeta?.gmailUrl || \"#\";\n    const receivedDate = emailMeta?.internalDate || new Date().toISOString();\n    \n    // Combine LLM analysis with email metadata\n    const combinedData = {\n      isImportant: parsedData.isImportant,\n      category: parsedData.category || \"unknown\",\n      summary: parsedData.summary || \"No summary available\",\n      actions: parsedData.actions || [],\n      from,\n      subject,\n      gmailUrl,\n      receivedDate,\n    };\n    \n    // Update aggregation stats\n    aggregationStats.total++;\n    if (combinedData.isImportant) {\n      aggregationStats.important++;\n      aggregationStats.importantList.push({\n        subject: combinedData.subject,\n        from: combinedData.from,\n      });\n    }\n    \n    // Track categories\n    const currentCount = aggregationStats.byCategory.get(combinedData.category) || 0;\n    aggregationStats.byCategory.set(combinedData.category, currentCount + 1);\n    \n    // Create formatted message\n    const message = createEmailMessage(combinedData);\n    \n    const outputItem = {\n      json: {\n        message,\n        isImportant: combinedData.isImportant,\n        subject: combinedData.subject,\n        from: combinedData.from,\n        category: combinedData.category,\n        receivedDate: combinedData.receivedDate,\n        gmailUrl: combinedData.gmailUrl,\n        summary: combinedData.summary,\n        actions: combinedData.actions,\n        isSummary: false,\n      },\n    };\n    \n    perEmailOutputs.push(outputItem);\n  } catch (error) {\n    console.error(\"Error processing email item:\", error);\n    aggregationStats.errors++;\n  }\n}\n\n/**\n * Creates daily summary message from aggregation stats\n * @param {Object} stats - Aggregation statistics\n * @returns {Object} Summary message object\n */\nfunction createDailySummary(stats) {\n  const finishedAt = new Date().toLocaleString();\n  \n  // Handle no emails case\n  if (stats.total === 0) {\n    return {\n      message: \"📧 Daily Gmail scan complete — no new emails found.\",\n      totalEmails: 0,\n      importantEmails: 0,\n      byCategory: {},\n      errors: stats.errors,\n      parsingFailures: stats.parsingFailures,\n      finishedAt,\n      isSummary: true,\n    };\n  }\n  \n  // Build category breakdown\n  const categoryEntries = Array.from(stats.byCategory.entries())\n    .sort(([, a], [, b]) => b - a)\n    .map(([category, count]) => `• ${category}: ${count}`)\n    .join(\"\\n\");\n  \n  // Build top important emails list\n  const topImportantLines = stats.importantList\n    .slice(0, 5)\n    .map((email) => `- **${email.subject}** — ${email.from}`)\n    .join(\"\\n\");\n  \n  // Construct summary message\n  let summaryMessage = `📊 **Daily Gmail Summary**\\n\\n📧 Total emails processed: ${stats.total}\\n🔴 Important emails: ${stats.important}`;\n  \n  if (stats.errors > 0) {\n    summaryMessage += `\\n⚠️ Processing errors: ${stats.errors}`;\n  }\n  \n  if (stats.parsingFailures > 0) {\n    summaryMessage += `\\n⚠️ Parsing failures: ${stats.parsingFailures}`;\n  }\n  \n  if (categoryEntries) {\n    summaryMessage += `\\n\\n**By category:**\\n${categoryEntries}`;\n  }\n  \n  if (topImportantLines) {\n    summaryMessage += `\\n\\n**Top important:**\\n${topImportantLines}`;\n  }\n  \n  summaryMessage += `\\n\\n✅ Individual summaries were sent above.\\n\\n_Scan completed at ${finishedAt}_`;\n  \n  return {\n    message: summaryMessage,\n    totalEmails: stats.total,\n    importantEmails: stats.important,\n    byCategory: Object.fromEntries(stats.byCategory),\n    errors: stats.errors,\n    parsingFailures: stats.parsingFailures,\n    finishedAt,\n    isSummary: true,\n  };\n}\n\n// Create and append daily summary\nconst summary = createDailySummary(aggregationStats);\nconst summaryItem = {\n  json: summary,\n};\nperEmailOutputs.push(summaryItem);\n\nreturn perEmailOutputs;\n"
       },
       "id": "format-telegram-message",
       "name": "Format for Telegram",
@@ -206,7 +206,7 @@
           "parameters": [
             {
               "name": "model",
-              "value": "llama3.2:3b"
+              "value": "qwen2.5:7b"
             },
             {
               "name": "prompt",
@@ -218,11 +218,7 @@
             },
             {
               "name": "system",
-              "value": "You are an email analysis agent. Your goal is to analyze an email and produce a structured JSON object describing its key attributes.\n\nFollow these rules strictly:\n1. Summarize the email concisely in plain language (no speculation).\n2. Extract up to 5 actionable items — each must be either:\n  - a short descriptive label with a valid URL starting with http or https, or\n  - plain text if no URL is present.\n3. Determine whether the email is important (true / false).\n4. Assign one category from this fixed list or create a new one:\n\nwork, meeting, personal, finance, travel, delivery,\nnotification, promotion, event, education, support, unknown\n\n\n5. If any field cannot be determined, return \"unknown\" or null.\n6. Do not invent or hallucinate any data.\n7. CRITICAL: Output ONLY valid JSON following the exact schema below. Do NOT include any explanatory text, code blocks, backticks, or commentary before or after the JSON.\n8. Your response must start with '{' and end with '}' - nothing else.\n\nExpected JSON format:\n{\n  \"subject\": \"string|null\",\n  \"from\": \"string|null\",\n  \"isImportant\": true,\n  \"summary\": \"string|null\",\n  \"category\": \"string|null\",\n  \"actions\": [\n    {\"label\": \"string\", \"url\": \"string\"}   // or a simple string action\n  ],\n  \"gmailUrl\": \"string|null\",\n  \"receivedDate\": \"string|null\"            // ISO8601, e.g. 2025-10-20T19:30:48Z\n}\n\nExample output:\n{\n  \"subject\": \"Invoice for October\",\n  \"from\": \"Acme Billing <billing@acme.com>\",\n  \"isImportant\": true,\n  \"summary\": \"Your October invoice is ready for payment.\",\n  \"category\": \"finance\",\n  \"actions\": [\n    {\"label\": \"View Invoice\", \"url\": \"https://acme.com/invoices/123\"},\n    {\"label\": \"Pay Now\", \"url\": \"https://acme.com/pay/123\"}\n  ],\n  \"gmailUrl\": \"https://mail.google.com/mail/u/0/#inbox/ABC123\",\n  \"receivedDate\": \"2025-10-24T09:41:12Z\"\n}"
-            },
-            {
-              "name": "format",
-              "value": "json"
+              "value": "You are an email analysis agent. Analyze the email and output a simple structured text format.\n\nFields to generate:\n1. Important: Determine if the email is important (Yes/No)\n2. Category: Assign ONE category from this list or create a new one:\n   work, meeting, personal, finance, travel, delivery, notification, promotion, event, education, support, unknown\n3. Summary: Write a concise summary in plain language (2-3 sentences max, no speculation)\n4. Actions: List 3-5 actionable items if present. Each action can be:\n   - A descriptive label with URL (e.g., \"View Invoice: https://example.com\")\n   - Plain text if no URL (e.g., \"Reply to sender\")\n   - If no actions, write \"None\"\n\nOutput format (follow exactly):\nImportant: Yes/No\nCategory: <category>\nSummary: <your summary text>\nActions:\n- <action 1>\n- <action 2>\n---\n\nRules:\n- Do not invent or hallucinate data\n- If you cannot determine a field, use \"Unknown\" or \"None\"\n- Keep summary factual and concise\n- Each action should be a single line starting with \"- \"\n- End with \"---\" on its own line\n- Do NOT include any explanatory text before or after the structured output\n\nExample output:\nImportant: Yes\nCategory: finance\nSummary: Your October invoice is ready for payment. The total amount is $250.00 and payment is due by November 15th.\nActions:\n- View Invoice: https://acme.com/invoices/123\n- Pay Now: https://acme.com/pay/123\n- Contact Support: support@acme.com\n---"
             },
             {
               "name": "options",
@@ -262,6 +258,86 @@
       "type": "n8n-nodes-base.telegram",
       "position": [928, 480],
       "webhookId": "ea8088a1-7a12-4dc2-b691-9e3d3d37cab1",
+      "typeVersion": 1.2,
+      "credentials": {
+        "telegramApi": {
+          "id": "h7RbmzMEg5YYOgNt",
+          "name": "Emails Summary Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "start-timestamp",
+              "name": "startTime",
+              "type": "string",
+              "value": "={{ new Date().toISOString() }}"
+            },
+            {
+              "id": "start-timestamp-ms",
+              "name": "startTimeMs",
+              "type": "number",
+              "value": "={{ Date.now() }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "add-start-timestamp",
+      "name": "Add Start Timestamp",
+      "type": "n8n-nodes-base.set",
+      "position": [1360, 560],
+      "typeVersion": 3.4
+    },
+    {
+      "parameters": {
+        "chatId": "={{ 219678893 }}",
+        "text": "=⏳ Processing email...\n📬 From: {{ $json.fromName }}\n📝 Subject: {{ $json.subject }}\n🤖 Model: qwen2.5:7b",
+        "additionalFields": {
+          "appendAttribution": false,
+          "disable_notification": true
+        }
+      },
+      "id": "notify-processing-started",
+      "name": "Notify Processing Started",
+      "type": "n8n-nodes-base.telegram",
+      "position": [1504, 560],
+      "webhookId": "notify-start-webhook",
+      "typeVersion": 1.2,
+      "credentials": {
+        "telegramApi": {
+          "id": "h7RbmzMEg5YYOgNt",
+          "name": "Emails Summary Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Calculate processing metrics after LLM response\nconst items = $input.all();\n\nreturn items.map(item => {\n  const startTimeMs = item.json.startTimeMs;\n  const endTimeMs = Date.now();\n  const durationMs = endTimeMs - startTimeMs;\n  const durationSec = Math.round(durationMs / 1000);\n  const durationMin = (durationSec / 60).toFixed(2);\n  \n  // Extract LLM metrics from response\n  const llmResponse = item.json.response || '';\n  const promptTokens = item.json.prompt_eval_count || 0;\n  const outputTokens = item.json.eval_count || 0;\n  const totalTokens = promptTokens + outputTokens;\n  \n  // Format duration for display\n  let durationDisplay;\n  if (durationSec < 60) {\n    durationDisplay = `${durationSec}s`;\n  } else if (durationSec < 3600) {\n    durationDisplay = `${durationMin}m`;\n  } else {\n    const hours = Math.floor(durationSec / 3600);\n    const mins = Math.floor((durationSec % 3600) / 60);\n    durationDisplay = `${hours}h ${mins}m`;\n  }\n  \n  return {\n    json: {\n      ...item.json,\n      durationMs,\n      durationSec,\n      durationMin,\n      durationDisplay,\n      promptTokens,\n      outputTokens,\n      totalTokens\n    }\n  };\n});"
+      },
+      "id": "calculate-metrics",
+      "name": "Calculate Metrics",
+      "type": "n8n-nodes-base.code",
+      "position": [1648, 560],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "chatId": "={{ 219678893 }}",
+        "text": "=✅ Completed processing\n📬 From: {{ $json.fromName }}\n📝 Subject: {{ $json.subject }}\n⏱️ Duration: {{ $json.durationDisplay }}\n🔢 Tokens: {{ $json.promptTokens }} prompt + {{ $json.outputTokens }} output = {{ $json.totalTokens }} total",
+        "additionalFields": {
+          "appendAttribution": false,
+          "disable_notification": true
+        }
+      },
+      "id": "notify-processing-complete",
+      "name": "Notify Processing Complete",
+      "type": "n8n-nodes-base.telegram",
+      "position": [1792, 560],
+      "webhookId": "notify-complete-webhook",
       "typeVersion": 1.2,
       "credentials": {
         "telegramApi": {
@@ -349,6 +425,28 @@
         ],
         [
           {
+            "node": "Add Start Timestamp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Add Start Timestamp": {
+      "main": [
+        [
+          {
+            "node": "Notify Processing Started",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify Processing Started": {
+      "main": [
+        [
+          {
             "node": "Summarise Email with LLM",
             "type": "main",
             "index": 0
@@ -357,6 +455,28 @@
       ]
     },
     "Summarise Email with LLM": {
+      "main": [
+        [
+          {
+            "node": "Calculate Metrics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate Metrics": {
+      "main": [
+        [
+          {
+            "node": "Notify Processing Complete",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify Processing Complete": {
       "main": [
         [
           {
