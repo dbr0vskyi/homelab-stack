@@ -11,12 +11,12 @@
           ]
         }
       },
-      "id": "986c2d23-8367-4a75-b56c-d8eca1fea48b",
+      "id": "ec27a3de-ff70-42f8-b7d6-720109f22392",
       "name": "Schedule Trigger",
       "type": "n8n-nodes-base.scheduleTrigger",
       "position": [
-        2240,
-        1392
+        -1376,
+        64
       ],
       "typeVersion": 1.2
     },
@@ -31,12 +31,12 @@
         },
         "options": {}
       },
-      "id": "12dae601-99dd-4e44-b5c8-a1d41bdf3ce2",
+      "id": "b45110ff-309f-4a9d-831c-52d012c42299",
       "name": "Get Unread Emails",
       "type": "n8n-nodes-base.gmail",
       "position": [
-        2432,
-        1392
+        -1184,
+        64
       ],
       "webhookId": "de438789-71b6-421a-b4ec-c8ff234aa80f",
       "typeVersion": 2,
@@ -82,12 +82,12 @@
         },
         "options": {}
       },
-      "id": "f589bb8d-1df4-47d2-b61d-67d412499e00",
+      "id": "5a668392-7a81-4df0-934c-fea9c70c2f4a",
       "name": "Any Emails?",
       "type": "n8n-nodes-base.if",
       "position": [
-        2624,
-        1392
+        -992,
+        64
       ],
       "typeVersion": 2,
       "alwaysOutputData": false
@@ -148,25 +148,25 @@
         },
         "options": {}
       },
-      "id": "394321f1-a8a6-4d15-8608-fcbe337586e6",
+      "id": "ab047334-3462-4b91-a9ef-497dd1d5bf64",
       "name": "Map Email Fields",
       "type": "n8n-nodes-base.set",
       "position": [
-        2832,
-        1392
+        -784,
+        64
       ],
       "typeVersion": 3.4
     },
     {
       "parameters": {
-        "jsCode": "// Email Sanitization Node v1.1 - Cleans raw email HTML and text for LLM processing\n// Based on: docs/email-sanitization-strategy.md + docs/email-sanitization-improvements.md\n// Changes in v1.1: Size pre-filter, enhanced entities, HTML comments/base64 removal, better promo detection\n\nconst items = $input.all();\n\n// ========== HELPER FUNCTIONS ==========\n\n/**\n * Cleans HTML tags, entities, and formatting from email text\n */\nfunction cleanHTML(rawHtml) {\n  let text = rawHtml;\n\n  // 1. Remove HTML comments (NEW in v1.1)\n  text = text.replace(/<!--[\\s\\S]*?-->/g, '');\n\n  // 2. Remove base64 encoded images (NEW in v1.1)\n  text = text.replace(/<img[^>]*src=\"data:image\\/[^\"]*\"[^>]*>/gi, '');\n  text = text.replace(/data:image\\/[^;]+;base64,[A-Za-z0-9+/=]+/g, '[image]');\n\n  // 3. Remove script and style tags entirely\n  text = text.replace(/<script[^>]*>[\\s\\S]*?<\\/script>/gi, '');\n  text = text.replace(/<style[^>]*>[\\s\\S]*?<\\/style>/gi, '');\n\n  // 4. Remove tracking pixels and analytics\n  text = text.replace(/<img[^>]*tracking[^>]*>/gi, '');\n  text = text.replace(/<img[^>]*analytics[^>]*>/gi, '');\n  text = text.replace(/<img[^>]*width=[\"']?1[\"']?[^>]*height=[\"']?1[\"']?[^>]*>/gi, '');\n  // NEW: Remove all remaining img tags (catch-all)\n  text = text.replace(/<img[^>]*>/gi, '');\n\n  // 5. Convert common HTML entities (ENHANCED in v1.1 - 30+ additional entities)\n  const entities = {\n    // Basic entities\n    '&nbsp;': ' ',\n    '&amp;': '&',\n    '&lt;': '<',\n    '&gt;': '>',\n    '&quot;': '\"',\n    '&#39;': \"'\",\n    '&mdash;': '\u2014',\n    '&ndash;': '\u2013',\n    '&hellip;': '...',\n    // Special characters (NEW in v1.1 - fixes Polish email issues)\n    '&zwnj;': '',       // Zero-width non-joiner\n    '&zwj;': '',        // Zero-width joiner\n    '&shy;': '',        // Soft hyphen\n    // Currency symbols (NEW)\n    '&euro;': '\u20ac',\n    '&pound;': '\u00a3',\n    '&yen;': '\u00a5',\n    '&cent;': '\u00a2',\n    '&curren;': '\u00a4',\n    // Common symbols (NEW)\n    '&copy;': '\u00a9',\n    '&reg;': '\u00ae',\n    '&trade;': '\u2122',\n    '&times;': '\u00d7',\n    '&divide;': '\u00f7',\n    '&deg;': '\u00b0',\n    '&plusmn;': '\u00b1',\n    '&frac12;': '\u00bd',\n    '&frac14;': '\u00bc',\n    '&frac34;': '\u00be',\n    '&laquo;': '\u00ab',\n    '&raquo;': '\u00bb',\n    '&rsquo;': ''',\n    '&lsquo;': ''',\n    '&rdquo;': '\"',\n    '&ldquo;': '\"',\n    '&bull;': '\u2022',\n    '&middot;': '\u00b7',\n    // Math symbols (NEW)\n    '&ne;': '\u2260',\n    '&le;': '\u2264',\n    '&ge;': '\u2265',\n    '&minus;': '\u2212',\n    '&radic;': '\u221a',\n    '&infin;': '\u221e',\n    // Arrows (NEW - common in promotional emails)\n    '&larr;': '\u2190',\n    '&uarr;': '\u2191',\n    '&rarr;': '\u2192',\n    '&darr;': '\u2193'\n  };\n\n  Object.keys(entities).forEach(entity => {\n    text = text.replace(new RegExp(entity, 'g'), entities[entity]);\n  });\n\n  // 6. Remove all HTML tags (preserve content)\n  text = text.replace(/<[^>]*>/g, ' ');\n\n  // 7. Decode remaining numeric entities\n  text = text.replace(/&#(\\d+);/g, (match, dec) => String.fromCharCode(dec));\n  text = text.replace(/&#x([0-9a-f]+);/gi, (match, hex) => String.fromCharCode(parseInt(hex, 16)));\n\n  // 8. Normalize whitespace\n  text = text.replace(/[ \\t]+/g, ' ');           // Multiple spaces to single\n  text = text.replace(/\\n\\s*\\n\\s*\\n/g, '\\n\\n');  // Multiple newlines to max 2\n  text = text.trim();\n\n  return text;\n}\n\n/**\n * Detects email language using character and word patterns\n */\nfunction detectLanguage(text, sender, subject) {\n  const combined = (text + ' ' + subject + ' ' + sender).toLowerCase();\n\n  const languagePatterns = {\n    polish: {\n      chars: /[\u0105\u0107\u0119\u0142\u0144\u00f3\u015b\u017a\u017c]/g,\n      words: ['jest', 'wiadomo\u015b\u0107', 'promocja', 'rabatu', 'sklep', 'dostaw'],\n      weight: 0\n    },\n    german: {\n      chars: /[\u00e4\u00f6\u00fc\u00df]/g,\n      words: ['das', 'ist', 'und', 'der', 'die', 'mit', 'f\u00fcr'],\n      weight: 0\n    },\n    french: {\n      chars: /[\u00e0\u00e2\u00e6\u00e7\u00e9\u00e8\u00ea\u00eb\u00ef\u00ee\u00f4\u00f9\u00fb\u00fc]/g,\n      words: ['est', 'pour', 'avec', 'dans', 'votre', 'merci'],\n      weight: 0\n    }\n  };\n\n  // Count special characters and words\n  Object.keys(languagePatterns).forEach(lang => {\n    const charMatches = combined.match(languagePatterns[lang].chars) || [];\n    languagePatterns[lang].weight += charMatches.length * 2;\n\n    languagePatterns[lang].words.forEach(word => {\n      if (combined.includes(word)) {\n        languagePatterns[lang].weight += 5;\n      }\n    });\n  });\n\n  // Find highest weight\n  let detectedLang = 'english';\n  let maxWeight = 20; // Threshold for non-English\n\n  Object.keys(languagePatterns).forEach(lang => {\n    if (languagePatterns[lang].weight > maxWeight) {\n      detectedLang = lang;\n      maxWeight = languagePatterns[lang].weight;\n    }\n  });\n\n  return detectedLang;\n}\n\n/**\n * Detects if email is promotional/marketing based on patterns\n * ENHANCED in v1.1 with actual failure cases from investigations\n */\nfunction isPromotional(email) {\n  const sender = email.fromAddress.toLowerCase();\n  const subject = email.subject.toLowerCase();\n  const text = email.text.toLowerCase();\n\n  // Sender domain patterns (ENHANCED - covers actual failure cases)\n  const promoSenders = [\n    'udemy.com', 'zalando', 'newsletter', 'marketing', 'promo', 'noreply',\n    // NEW in v1.1: From actual failed emails (investigations 191, 195, 197, 198)\n    'educative.io',\n    'coursera.org',\n    'bestsecret',\n    'levi.com',\n    'levis.com',\n    'linkedin.com/comm',\n    'substack.com',\n    'junodownload.com',\n    'medicover.pl',\n    'empik.com',\n    '4ride.pl',\n    'tripadvisor',\n    'revolut.com/marketing',\n    'bolt.eu/promo',\n    'imdb.com/updates',\n    'github.com/marketing',\n    'lastpass.com/surveys'\n  ];\n  const hasPromoSender = promoSenders.some(pattern => sender.includes(pattern));\n\n  // Subject patterns (ENHANCED)\n  const promoKeywords = [\n    'sale', 'discount', '% off', 'new arrivals', 'special offer', 'limited time',\n    // NEW in v1.1\n    'newsletter',\n    'weekly digest',\n    'new courses',\n    'black week',\n    'pre-order',\n    'preorder',\n    'halloween',\n    'fashion',\n    'new vinyl',\n    'survey',\n    'webinar',\n    'updates from'\n  ];\n  const hasPromoSubject = promoKeywords.some(kw => subject.includes(kw));\n\n  // Content patterns (product listing indicators) - ENHANCED\n  const productPatterns = [\n    /\\$\\d+\\.\\d{2}/g,        // Prices: $19.99\n    /\u20ac\\d+[,\\.]\\d{2}/g,      // Euro prices: \u20ac19,99\n    /z\u0142\\s*\\d+/g,            // Polish z\u0142oty: z\u0142 99\n    /PLN\\s*\\d+/g,           // NEW: Polish z\u0142oty alternate format\n    /buy now/gi,            // CTA\n    /shop now/gi,           // CTA\n    /\\d+%\\s*off/gi,         // Discount mentions\n    // NEW patterns from actual emails\n    /view course/gi,\n    /enroll now/gi,\n    /add to cart/gi,\n    /learn more/gi,\n    /get started/gi,\n    /claim offer/gi,\n    /limited seats/gi,\n    /expires? (soon|today|tomorrow)/gi,\n    /hurry/gi\n  ];\n\n  let productMentions = 0;\n  productPatterns.forEach(pattern => {\n    const matches = text.match(pattern) || [];\n    productMentions += matches.length;\n  });\n\n  // ADJUSTED threshold from 5 to 3 (more aggressive detection)\n  const hasHighProductDensity = productMentions >= 3;\n\n  return hasPromoSender || hasPromoSubject || hasHighProductDensity;\n}\n\n/**\n * Extracts product blocks from promotional emails\n */\nfunction extractProductBlocks(text) {\n  const lines = text.split('\\n');\n  const products = [];\n\n  let currentBlock = '';\n  for (const line of lines) {\n    // Detect product line (has price or CTA)\n    if (/\\$\\d+|\u20ac\\d+|buy|shop|view/gi.test(line)) {\n      if (currentBlock.length > 10) {\n        products.push(currentBlock.trim());\n      }\n      currentBlock = line;\n    } else {\n      currentBlock += ' ' + line;\n    }\n  }\n\n  if (currentBlock.length > 10) {\n    products.push(currentBlock.trim());\n  }\n\n  return products.slice(0, 3); // Max 3 products\n}\n\n/**\n * Simplifies promotional emails to essential information\n */\nfunction sanitizePromotionalEmail(text, subject, sender) {\n  const productBlocks = extractProductBlocks(text);\n\n  let simplified = `Newsletter from ${sender}\\nSubject: ${subject}\\n\\nType: Promotional content\\n\\n`;\n\n  if (productBlocks.length > 0) {\n    simplified += 'Key items mentioned:\\n';\n    simplified += productBlocks.slice(0, 3).join('\\n') + '\\n';\n  }\n\n  if (productBlocks.length > 3) {\n    simplified += '\\n[Additional products truncated]\\n';\n  }\n\n  return simplified;\n}\n\n/**\n * Extracts URLs and replaces them with placeholders\n */\nfunction extractAndReplaceURLs(text) {\n  const urls = [];\n  const urlPattern = /https?:\\/\\/[^\\s<>\"]+/g;\n\n  // Extract all URLs\n  let match;\n  while ((match = urlPattern.exec(text)) !== null) {\n    urls.push(match[0]);\n  }\n\n  // Remove duplicates\n  const uniqueUrls = [...new Set(urls)];\n\n  // Replace URLs with short placeholders\n  let cleanedText = text;\n  uniqueUrls.forEach((url, index) => {\n    const placeholder = `[LINK_${index + 1}]`;\n    cleanedText = cleanedText.replace(new RegExp(url.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&'), 'g'), placeholder);\n  });\n\n  return {\n    cleanedText,\n    urls: uniqueUrls\n  };\n}\n\n/**\n * Removes common email boilerplate (footers, unsubscribe, etc.)\n */\nfunction removeBoilerplate(text) {\n  const boilerplatePatterns = [\n    // Unsubscribe sections\n    /unsubscribe.*?(\\n\\n|\\n|$)/gi,\n    /click here to (stop receiving|opt out|manage).*?(\\n\\n|\\n|$)/gi,\n    /you (are receiving|received) this.*?(\\n\\n|\\n|$)/gi,\n\n    // Privacy/legal\n    /privacy policy.*?(\\n\\n|\\n|$)/gi,\n    /terms (and|&) conditions.*?(\\n\\n|\\n|$)/gi,\n    /this email (is|was) sent.*?(\\n\\n|\\n|$)/gi,\n\n    // View in browser\n    /(view|open) (this|email) in.*?browser.*?(\\n\\n|\\n|$)/gi,\n    /can't see.*?images.*?(\\n\\n|\\n|$)/gi,\n\n    // Social media footer\n    /follow us on.*?(\\n\\n|\\n|$)/gi,\n\n    // Copyright\n    /\u00a9.*?\\d{4}.*?(\\n\\n|\\n|$)/gi,\n    /copyright.*?\\d{4}.*?(\\n\\n|\\n|$)/gi,\n  ];\n\n  let cleaned = text;\n  boilerplatePatterns.forEach(pattern => {\n    cleaned = cleaned.replace(pattern, '\\n');\n  });\n\n  // Remove trailing repetitive content (last 15% if footer-like)\n  const lines = cleaned.split('\\n');\n  const threshold = Math.floor(lines.length * 0.85);\n  const lastSection = lines.slice(threshold).join('\\n').toLowerCase();\n\n  if (/unsubscribe|privacy|copyright|address|follow us/.test(lastSection)) {\n    cleaned = lines.slice(0, threshold).join('\\n');\n  }\n\n  return cleaned.trim();\n}\n\n/**\n * Adds language context instruction for non-English emails\n */\nfunction addLanguageContext(text, detectedLanguage) {\n  if (detectedLanguage === 'english') {\n    return text;\n  }\n\n  const languageHints = {\n    polish: 'Polish',\n    german: 'German',\n    french: 'French'\n  };\n\n  const langName = languageHints[detectedLanguage] || detectedLanguage;\n\n  return `[LANGUAGE: This email is written in ${langName}. Extract the information and provide ALL output fields in English, regardless of the email's language.]\\n\\n${text}`;\n}\n\n/**\n * Truncates email text to maximum character length\n */\nfunction truncateEmail(text, maxChars = 10000) {\n  if (text.length <= maxChars) {\n    return text;\n  }\n\n  // Try to truncate at sentence boundary\n  const truncated = text.substring(0, maxChars);\n\n  // Find last sentence ending\n  const lastPeriod = truncated.lastIndexOf('.');\n  const lastQuestion = truncated.lastIndexOf('?');\n  const lastExclaim = truncated.lastIndexOf('!');\n\n  const lastSentenceEnd = Math.max(lastPeriod, lastQuestion, lastExclaim);\n\n  if (lastSentenceEnd > maxChars * 0.8) {\n    // Good sentence boundary found (within last 20%)\n    return truncated.substring(0, lastSentenceEnd + 1) + '\\n\\n[Email content truncated due to length]';\n  } else {\n    // No good boundary, hard truncate\n    return truncated + '...\\n\\n[Email content truncated due to length]';\n  }\n}\n\n// ========== MAIN SANITIZATION FUNCTION ==========\n\nfunction sanitizeEmail(email) {\n  // NEW in v1.1: PRE-FILTER for extremely large emails\n  const MAX_RAW_EMAIL_SIZE = 100000; // 100KB raw HTML limit\n\n  if (email.text && email.text.length > MAX_RAW_EMAIL_SIZE) {\n    console.warn(`\u26a0\ufe0f Email too large (${email.text.length} chars), skipping detailed processing`);\n\n    return {\n      json: {\n        id: email.id,\n        to: email.to,\n        fromAddress: email.fromAddress,\n        fromName: email.fromName,\n        subject: email.subject,\n        gmailUrl: email.gmailUrl,\n        internalDate: email.internalDate,\n        text: `[Email too large to process - ${email.text.length} characters. Please view in Gmail.]`,\n        urlMap: [],\n        language: 'english',\n        isPromotional: true,\n        sanitizationStats: {\n          originalLength: email.text.length,\n          cleanedLength: 0,\n          reductionPercent: 0,\n          urlsExtracted: 0,\n          skippedReason: 'too_large'\n        }\n      }\n    };\n  }\n\n  // Extract metadata (already clean from Gmail API)\n  const metadata = {\n    id: email.id,\n    to: email.to,\n    fromAddress: email.fromAddress,\n    fromName: email.fromName,\n    subject: email.subject,\n    gmailUrl: email.gmailUrl,\n    internalDate: email.internalDate\n  };\n\n  // Get raw text\n  let text = email.text || '';\n  const originalLength = text.length;\n\n  // Step 1: Clean HTML\n  text = cleanHTML(text);\n\n  // Step 2: Detect language\n  const language = detectLanguage(text, email.fromAddress, email.subject);\n\n  // Step 3: Detect if promotional\n  const isPromo = isPromotional(email);\n\n  // Step 4: Apply promotional simplification if needed\n  if (isPromo) {\n    text = sanitizePromotionalEmail(text, email.subject, email.fromName);\n  }\n\n  // Step 5: Extract and replace URLs\n  const { cleanedText, urls } = extractAndReplaceURLs(text);\n  text = cleanedText;\n\n  // Step 6: Remove boilerplate\n  text = removeBoilerplate(text);\n\n  // Step 7: Normalize whitespace (final cleanup)\n  text = text.replace(/\\s+/g, ' ').trim();\n  text = text.replace(/\\n\\s*\\n\\s*\\n+/g, '\\n\\n'); // Max 2 consecutive newlines\n\n  // Step 8: Add language context if non-English\n  if (language !== 'english') {\n    text = addLanguageContext(text, language);\n  }\n\n  // Step 9: Truncate if too long\n  text = truncateEmail(text, 10000);\n\n  // Calculate statistics\n  const cleanedLength = text.length;\n  const reductionPercent = originalLength > 0 ? Math.round((1 - cleanedLength / originalLength) * 100) : 0;\n\n  return {\n    json: {\n      ...metadata,\n      text: text,\n      urlMap: urls,\n      language: language,\n      isPromotional: isPromo,\n      sanitizationStats: {\n        originalLength,\n        cleanedLength,\n        reductionPercent,\n        urlsExtracted: urls.length\n      }\n    }\n  };\n}\n\n// ========== PROCESS ALL EMAILS ==========\n\nconst output = items.map(item => sanitizeEmail(item.json || item));\n\n// Log summary statistics\nconst totalReduction = output.reduce((sum, item) => sum + item.json.sanitizationStats.reductionPercent, 0);\nconst avgReduction = output.length > 0 ? Math.round(totalReduction / output.length) : 0;\nconst totalUrls = output.reduce((sum, item) => sum + item.json.sanitizationStats.urlsExtracted, 0);\nconst nonEnglishCount = output.filter(item => item.json.language !== 'english').length;\nconst promotionalCount = output.filter(item => item.json.isPromotional).length;\nconst skippedCount = output.filter(item => item.json.sanitizationStats.skippedReason).length;\n\nconsole.log(`\u2705 Sanitized ${output.length} emails`);\nconsole.log(`\ud83d\udcca Avg token reduction: ${avgReduction}%`);\nconsole.log(`\ud83d\udd17 URLs extracted: ${totalUrls}`);\nconsole.log(`\ud83c\udf0d Non-English emails: ${nonEnglishCount}`);\nconsole.log(`\ud83d\udce7 Promotional emails: ${promotionalCount}`);\nif (skippedCount > 0) {\n  console.log(`\u23ed\ufe0f  Skipped (too large): ${skippedCount}`);\n}\n\nreturn output;"
+        "jsCode": "// Email Sanitization Node - Cleans raw email HTML and text for LLM processing\n// Based on: docs/email-sanitization-strategy.md\n\nconst items = $input.all();\n\n// ========== HELPER FUNCTIONS ==========\n\n/**\n * Cleans HTML tags, entities, and formatting from email text\n */\nfunction cleanHTML(rawHtml) {\n  let text = rawHtml;\n\n  // 1. Remove script and style tags entirely\n  text = text.replace(/<script[^>]*>[\\s\\S]*?<\\/script>/gi, '');\n  text = text.replace(/<style[^>]*>[\\s\\S]*?<\\/style>/gi, '');\n\n  // 2. Remove tracking pixels and analytics\n  text = text.replace(/<img[^>]*tracking[^>]*>/gi, '');\n  text = text.replace(/<img[^>]*analytics[^>]*>/gi, '');\n  text = text.replace(/<img[^>]*width=[\"']?1[\"']?[^>]*height=[\"']?1[\"']?[^>]*>/gi, '');\n\n  // 3. Convert common HTML entities\n  const entities = {\n    '&nbsp;': ' ',\n    '&amp;': '&',\n    '&lt;': '<',\n    '&gt;': '>',\n    '&quot;': '\"',\n    '&#39;': \"'\",\n    '&mdash;': '—',\n    '&ndash;': '–',\n    '&hellip;': '...'\n  };\n\n  Object.keys(entities).forEach(entity => {\n    text = text.replace(new RegExp(entity, 'g'), entities[entity]);\n  });\n\n  // 4. Remove all HTML tags (preserve content)\n  text = text.replace(/<[^>]*>/g, ' ');\n\n  // 5. Decode remaining numeric entities\n  text = text.replace(/&#(\\d+);/g, (match, dec) => String.fromCharCode(dec));\n  text = text.replace(/&#x([0-9a-f]+);/gi, (match, hex) => String.fromCharCode(parseInt(hex, 16)));\n\n  // 6. Normalize whitespace\n  text = text.replace(/[ \\t]+/g, ' ');           // Multiple spaces to single\n  text = text.replace(/\\n\\s*\\n\\s*\\n/g, '\\n\\n');  // Multiple newlines to max 2\n  text = text.trim();\n\n  return text;\n}\n\n/**\n * Detects email language using character and word patterns\n */\nfunction detectLanguage(text, sender, subject) {\n  const combined = (text + ' ' + subject + ' ' + sender).toLowerCase();\n\n  const languagePatterns = {\n    polish: {\n      chars: /[ąćęłńóśźż]/g,\n      words: ['jest', 'wiadomość', 'promocja', 'rabatu', 'sklep', 'dostaw'],\n      weight: 0\n    },\n    german: {\n      chars: /[äöüß]/g,\n      words: ['das', 'ist', 'und', 'der', 'die', 'mit', 'für'],\n      weight: 0\n    },\n    french: {\n      chars: /[àâæçéèêëïîôùûü]/g,\n      words: ['est', 'pour', 'avec', 'dans', 'votre', 'merci'],\n      weight: 0\n    }\n  };\n\n  // Count special characters and words\n  Object.keys(languagePatterns).forEach(lang => {\n    const charMatches = combined.match(languagePatterns[lang].chars) || [];\n    languagePatterns[lang].weight += charMatches.length * 2;\n\n    languagePatterns[lang].words.forEach(word => {\n      if (combined.includes(word)) {\n        languagePatterns[lang].weight += 5;\n      }\n    });\n  });\n\n  // Find highest weight\n  let detectedLang = 'english';\n  let maxWeight = 20; // Threshold for non-English\n\n  Object.keys(languagePatterns).forEach(lang => {\n    if (languagePatterns[lang].weight > maxWeight) {\n      detectedLang = lang;\n      maxWeight = languagePatterns[lang].weight;\n    }\n  });\n\n  return detectedLang;\n}\n\n/**\n * Detects if email is promotional/marketing based on patterns\n */\nfunction isPromotional(email) {\n  const sender = email.fromAddress.toLowerCase();\n  const subject = email.subject.toLowerCase();\n  const text = email.text.toLowerCase();\n\n  // Sender domain patterns\n  const promoSenders = ['udemy.com', 'zalando', 'newsletter', 'marketing', 'promo', 'noreply'];\n  const hasPromoSender = promoSenders.some(pattern => sender.includes(pattern));\n\n  // Subject patterns\n  const promoKeywords = ['sale', 'discount', '% off', 'new arrivals', 'special offer', 'limited time'];\n  const hasPromoSubject = promoKeywords.some(kw => subject.includes(kw));\n\n  // Content patterns (product listing indicators)\n  const productPatterns = [\n    /\\$\\d+\\.\\d{2}/g,        // Prices: $19.99\n    /€\\d+[,\\.]\\d{2}/g,      // Euro prices: €19,99\n    /zł\\s*\\d+/g,            // Polish złoty: zł 99\n    /buy now/gi,            // CTA\n    /shop now/gi,           // CTA\n    /\\d+%\\s*off/gi,         // Discount mentions\n  ];\n\n  let productMentions = 0;\n  productPatterns.forEach(pattern => {\n    const matches = text.match(pattern) || [];\n    productMentions += matches.length;\n  });\n\n  // If 5+ product mentions, likely promotional\n  const hasHighProductDensity = productMentions >= 5;\n\n  return hasPromoSender || hasPromoSubject || hasHighProductDensity;\n}\n\n/**\n * Extracts product blocks from promotional emails\n */\nfunction extractProductBlocks(text) {\n  const lines = text.split('\\n');\n  const products = [];\n\n  let currentBlock = '';\n  for (const line of lines) {\n    // Detect product line (has price or CTA)\n    if (/\\$\\d+|€\\d+|buy|shop|view/gi.test(line)) {\n      if (currentBlock.length > 10) {\n        products.push(currentBlock.trim());\n      }\n      currentBlock = line;\n    } else {\n      currentBlock += ' ' + line;\n    }\n  }\n\n  if (currentBlock.length > 10) {\n    products.push(currentBlock.trim());\n  }\n\n  return products.slice(0, 3); // Max 3 products\n}\n\n/**\n * Simplifies promotional emails to essential information\n */\nfunction sanitizePromotionalEmail(text, subject, sender) {\n  const productBlocks = extractProductBlocks(text);\n  \n  let simplified = `Newsletter from ${sender}\\nSubject: ${subject}\\n\\nType: Promotional content\\n\\n`;\n  \n  if (productBlocks.length > 0) {\n    simplified += 'Key items mentioned:\\n';\n    simplified += productBlocks.slice(0, 3).join('\\n') + '\\n';\n  }\n  \n  if (productBlocks.length > 3) {\n    simplified += '\\n[Additional products truncated]\\n';\n  }\n  \n  return simplified;\n}\n\n/**\n * Extracts URLs and replaces them with placeholders\n */\nfunction extractAndReplaceURLs(text) {\n  const urls = [];\n  const urlPattern = /https?:\\/\\/[^\\s<>\"]+/g;\n\n  // Extract all URLs\n  let match;\n  while ((match = urlPattern.exec(text)) !== null) {\n    urls.push(match[0]);\n  }\n\n  // Remove duplicates\n  const uniqueUrls = [...new Set(urls)];\n\n  // Replace URLs with short placeholders\n  let cleanedText = text;\n  uniqueUrls.forEach((url, index) => {\n    const placeholder = `[LINK_${index + 1}]`;\n    cleanedText = cleanedText.replace(new RegExp(url.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&'), 'g'), placeholder);\n  });\n\n  return {\n    cleanedText,\n    urls: uniqueUrls\n  };\n}\n\n/**\n * Removes common email boilerplate (footers, unsubscribe, etc.)\n */\nfunction removeBoilerplate(text) {\n  const boilerplatePatterns = [\n    // Unsubscribe sections\n    /unsubscribe.*?(\\n\\n|\\n|$)/gi,\n    /click here to (stop receiving|opt out|manage).*?(\\n\\n|\\n|$)/gi,\n    /you (are receiving|received) this.*?(\\n\\n|\\n|$)/gi,\n\n    // Privacy/legal\n    /privacy policy.*?(\\n\\n|\\n|$)/gi,\n    /terms (and|&) conditions.*?(\\n\\n|\\n|$)/gi,\n    /this email (is|was) sent.*?(\\n\\n|\\n|$)/gi,\n\n    // View in browser\n    /(view|open) (this|email) in.*?browser.*?(\\n\\n|\\n|$)/gi,\n    /can't see.*?images.*?(\\n\\n|\\n|$)/gi,\n\n    // Social media footer\n    /follow us on.*?(\\n\\n|\\n|$)/gi,\n\n    // Copyright\n    /©.*?\\d{4}.*?(\\n\\n|\\n|$)/gi,\n    /copyright.*?\\d{4}.*?(\\n\\n|\\n|$)/gi,\n  ];\n\n  let cleaned = text;\n  boilerplatePatterns.forEach(pattern => {\n    cleaned = cleaned.replace(pattern, '\\n');\n  });\n\n  // Remove trailing repetitive content (last 15% if footer-like)\n  const lines = cleaned.split('\\n');\n  const threshold = Math.floor(lines.length * 0.85);\n  const lastSection = lines.slice(threshold).join('\\n').toLowerCase();\n\n  if (/unsubscribe|privacy|copyright|address|follow us/.test(lastSection)) {\n    cleaned = lines.slice(0, threshold).join('\\n');\n  }\n\n  return cleaned.trim();\n}\n\n/**\n * Adds language context instruction for non-English emails\n */\nfunction addLanguageContext(text, detectedLanguage) {\n  if (detectedLanguage === 'english') {\n    return text;\n  }\n\n  const languageHints = {\n    polish: 'Polish',\n    german: 'German',\n    french: 'French'\n  };\n\n  const langName = languageHints[detectedLanguage] || detectedLanguage;\n\n  return `[LANGUAGE: This email is written in ${langName}. Extract the information and provide ALL output fields in English, regardless of the email's language.]\\n\\n${text}`;\n}\n\n/**\n * Truncates email text to maximum character length\n */\nfunction truncateEmail(text, maxChars = 10000) {\n  if (text.length <= maxChars) {\n    return text;\n  }\n\n  // Try to truncate at sentence boundary\n  const truncated = text.substring(0, maxChars);\n\n  // Find last sentence ending\n  const lastPeriod = truncated.lastIndexOf('.');\n  const lastQuestion = truncated.lastIndexOf('?');\n  const lastExclaim = truncated.lastIndexOf('!');\n\n  const lastSentenceEnd = Math.max(lastPeriod, lastQuestion, lastExclaim);\n\n  if (lastSentenceEnd > maxChars * 0.8) {\n    // Good sentence boundary found (within last 20%)\n    return truncated.substring(0, lastSentenceEnd + 1) + '\\n\\n[Email content truncated due to length]';\n  } else {\n    // No good boundary, hard truncate\n    return truncated + '...\\n\\n[Email content truncated due to length]';\n  }\n}\n\n// ========== MAIN SANITIZATION FUNCTION ==========\n\nfunction sanitizeEmail(email) {\n  // Extract metadata (already clean from Gmail API)\n  const metadata = {\n    id: email.id,\n    to: email.to,\n    fromAddress: email.fromAddress,\n    fromName: email.fromName,\n    subject: email.subject,\n    gmailUrl: email.gmailUrl,\n    internalDate: email.internalDate\n  };\n\n  // Get raw text\n  let text = email.text || '';\n  const originalLength = text.length;\n\n  // Step 1: Clean HTML\n  text = cleanHTML(text);\n\n  // Step 2: Detect language\n  const language = detectLanguage(text, email.fromAddress, email.subject);\n\n  // Step 3: Detect if promotional\n  const isPromo = isPromotional(email);\n\n  // Step 4: Apply promotional simplification if needed\n  if (isPromo) {\n    text = sanitizePromotionalEmail(text, email.subject, email.fromName);\n  }\n\n  // Step 5: Extract and replace URLs\n  const { cleanedText, urls } = extractAndReplaceURLs(text);\n  text = cleanedText;\n\n  // Step 6: Remove boilerplate\n  text = removeBoilerplate(text);\n\n  // Step 7: Normalize whitespace (final cleanup)\n  text = text.replace(/\\s+/g, ' ').trim();\n  text = text.replace(/\\n\\s*\\n\\s*\\n+/g, '\\n\\n'); // Max 2 consecutive newlines\n\n  // Step 8: Add language context if non-English\n  if (language !== 'english') {\n    text = addLanguageContext(text, language);\n  }\n\n  // Step 9: Truncate if too long\n  text = truncateEmail(text, 10000);\n\n  // Calculate statistics\n  const cleanedLength = text.length;\n  const reductionPercent = originalLength > 0 ? Math.round((1 - cleanedLength / originalLength) * 100) : 0;\n\n  return {\n    json: {\n      ...metadata,\n      text: text,\n      urlMap: urls,\n      language: language,\n      isPromotional: isPromo,\n      sanitizationStats: {\n        originalLength,\n        cleanedLength,\n        reductionPercent,\n        urlsExtracted: urls.length\n      }\n    }\n  };\n}\n\n// ========== PROCESS ALL EMAILS ==========\n\nconst output = items.map(item => sanitizeEmail(item.json || item));\n\n// Log summary statistics\nconst totalReduction = output.reduce((sum, item) => sum + item.json.sanitizationStats.reductionPercent, 0);\nconst avgReduction = output.length > 0 ? Math.round(totalReduction / output.length) : 0;\nconst totalUrls = output.reduce((sum, item) => sum + item.json.sanitizationStats.urlsExtracted, 0);\nconst nonEnglishCount = output.filter(item => item.json.language !== 'english').length;\nconst promotionalCount = output.filter(item => item.json.isPromotional).length;\n\nconsole.log(`✅ Sanitized ${output.length} emails`);\nconsole.log(`📊 Avg token reduction: ${avgReduction}%`);\nconsole.log(`🔗 URLs extracted: ${totalUrls}`);\nconsole.log(`🌍 Non-English emails: ${nonEnglishCount}`);\nconsole.log(`📧 Promotional emails: ${promotionalCount}`);\n\nreturn output;"
       },
-      "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "id": "c7b9da40-eaef-460f-a14e-4a4dad72e857",
       "name": "Clean Email Input",
       "type": "n8n-nodes-base.code",
       "position": [
-        2960,
-        1392
+        -592,
+        64
       ],
       "typeVersion": 2
     },
@@ -176,43 +176,43 @@
           "reset": false
         }
       },
-      "id": "d5438322-4e29-41d8-b891-10644a818d28",
+      "id": "3156d1bc-52ea-4cbb-8801-5690639709eb",
       "name": "Loop Over Emails",
       "type": "n8n-nodes-base.splitInBatches",
       "position": [
-        3072,
-        1392
+        -384,
+        64
       ],
       "typeVersion": 3
     },
     {
       "parameters": {
-        "jsCode": "// Single Code node: per-email Telegram messages + final daily summary\n// Parses text format from LLM and combines with email metadata from previous nodes\n\n// ---------- helpers ----------\n\n/**\n * Parses text response from LLM into structured data\n * @param {string} text - Raw text response from LLM\n * @returns {Object|null} Parsed data or null on failure\n */\nfunction parseTextResponse(text) {\n  if (!text || typeof text !== 'string') return null;\n  \n  const result = {\n    isImportant: false,\n    category: 'unknown',\n    summary: '',\n    actions: []\n  };\n  \n  const lines = text.trim().split('\\n');\n  let currentField = null;\n  let inActions = false;\n  \n  for (let line of lines) {\n    line = line.trim();\n    \n    // Check for end marker\n    if (line === '---') break;\n    \n    // Parse field lines\n    if (line.startsWith('Important:')) {\n      const value = line.substring('Important:'.length).trim().toLowerCase();\n      result.isImportant = value === 'yes' || value === 'true';\n      inActions = false;\n      currentField = null;\n    } else if (line.startsWith('Category:')) {\n      result.category = line.substring('Category:'.length).trim();\n      inActions = false;\n      currentField = null;\n    } else if (line.startsWith('Summary:')) {\n      result.summary = line.substring('Summary:'.length).trim();\n      currentField = 'summary';\n      inActions = false;\n    } else if (line.startsWith('Actions:')) {\n      inActions = true;\n      currentField = null;\n    } else if (inActions && line.startsWith('-')) {\n      // Parse action line\n      const action = line.substring(1).trim();\n      if (action && action.toLowerCase() !== 'none') {\n        result.actions.push(action);\n      }\n    } else if (currentField === 'summary' && line && !inActions) {\n      // Continue multi-line summary\n      result.summary += ' ' + line;\n    }\n  }\n  \n  return result;\n}\n\n/**\n * Cleans and normalizes sender name from email\n * @param {string} senderName - Raw sender name from email\n * @returns {string} Cleaned sender name\n */\nfunction cleanFromName(senderName) {\n  if (!senderName) return \"Unknown sender\";\n  \n  let cleaned = String(senderName).trim();\n  \n  // Remove email address in angle brackets\n  if (cleaned.includes(\"<\")) {\n    cleaned = cleaned.split(\"<\")[0].trim();\n  }\n  \n  // Remove domain after pipe\n  if (cleaned.includes(\"|\")) {\n    cleaned = cleaned.split(\"|\")[0].trim();\n  }\n  \n  // Remove surrounding quotes\n  cleaned = cleaned.replace(/^[\\\"']|[\\\"']$/g, \"\");\n  \n  return cleaned || \"Unknown sender\";\n}\n\n/**\n * Formats action items into markdown list with proper link handling\n * @param {Array<string>} actions - Array of action strings\n * @returns {string} Formatted actions block or empty string\n */\nfunction formatActions(actions) {\n  if (!Array.isArray(actions) || actions.length === 0) {\n    return \"\";\n  }\n  \n  const URL_REGEX = /https?:\\/\\/\\S+/;\n  \n  const formattedActions = actions\n    .map((action) => {\n      // Handle \"Label: URL\" format\n      if (action.includes(\":\")) {\n        const parts = action.split(\":\");\n        const label = parts[0].trim();\n        const rest = parts.slice(1).join(\":\").trim();\n        const urlMatch = rest.match(URL_REGEX);\n        \n        if (urlMatch) {\n          return `- [${label}](${urlMatch[0]})`;\n        }\n      }\n      \n      // Handle direct URL in text\n      const urlMatch = action.match(URL_REGEX);\n      if (urlMatch) {\n        return `- [Open link](${urlMatch[0]})`;\n      }\n      \n      // Plain text action\n      return `- ${action}`;\n    })\n    .filter(Boolean);\n  \n  return formattedActions.length > 0\n    ? `\\n\\nActions:\\n${formattedActions.join(\"\\n\")}`\n    : \"\";\n}\n\n/**\n * Creates formatted email message\n * @param {Object} data - Combined email data\n * @returns {string} Formatted message string\n */\nfunction createEmailMessage(data) {\n  const { from, subject, category, receivedDate, summary, actions, gmailUrl } = data;\n  const actionsBlock = formatActions(actions);\n  const formattedDate = new Date(receivedDate).toLocaleString();\n  \n  return `[${from}]: ${subject}\\nCategory: ${category}\\nReceived: ${formattedDate}\\n\\n${summary}${actionsBlock}\\n\\n[Open in Gmail](${gmailUrl})`;\n}\n\n// ---------- main ----------\nconst items = $input.all();\n\n// Early validation\nif (!items || !Array.isArray(items)) {\n  console.error(\"Invalid input: Expected array of items\");\n  return [\n    {\n      json: {\n        message: \"\u274c Error: Invalid input data provided to email formatter\",\n        error: true,\n        isSummary: true,\n      },\n    },\n  ];\n}\n\nconst perEmailOutputs = [];\nconst aggregationStats = {\n  total: 0,\n  important: 0,\n  byCategory: new Map(),\n  importantList: [],\n  errors: 0,\n  parsingFailures: 0,\n};\n\nfor (const item of items) {\n  try {\n    // Handle both formats: items with or without .json wrapper\n    const data = item.json || item;\n    \n    console.log(\"Processing item:\", JSON.stringify(data).substring(0, 200));\n    \n    // Get LLM response text\n    const llmResponse = data.response;\n    \n    if (!llmResponse) {\n      console.warn(\"Skipping item with no LLM response. Available keys:\", Object.keys(data));\n      aggregationStats.errors++;\n      continue;\n    }\n    \n    // Parse LLM text response\n    const parsedData = parseTextResponse(llmResponse);\n    \n    if (!parsedData) {\n      console.error(`Failed to parse LLM response. Preview: ${llmResponse.substring(0, 100)}...`);\n      aggregationStats.parsingFailures++;\n      aggregationStats.errors++;\n      continue;\n    }\n    \n    // Get email metadata\n    const from = cleanFromName(data.fromName || \"Unknown sender\");\n    const subject = data.subject || \"No subject\";\n    const gmailUrl = data.gmailUrl || \"#\";\n    const receivedDate = data.internalDate || new Date().toISOString();\n    \n    // Combine LLM analysis with email metadata\n    const combinedData = {\n      isImportant: parsedData.isImportant,\n      category: parsedData.category || \"unknown\",\n      summary: parsedData.summary || \"No summary available\",\n      actions: parsedData.actions || [],\n      from,\n      subject,\n      gmailUrl,\n      receivedDate,\n    };\n    \n    // Update aggregation stats\n    aggregationStats.total++;\n    if (combinedData.isImportant) {\n      aggregationStats.important++;\n      aggregationStats.importantList.push({\n        subject: combinedData.subject,\n        from: combinedData.from,\n      });\n    }\n    \n    // Track categories\n    const currentCount = aggregationStats.byCategory.get(combinedData.category) || 0;\n    aggregationStats.byCategory.set(combinedData.category, currentCount + 1);\n    \n    // Create formatted message\n    const message = createEmailMessage(combinedData);\n    \n    const outputItem = {\n      json: {\n        message,\n        isImportant: combinedData.isImportant,\n        subject: combinedData.subject,\n        from: combinedData.from,\n        category: combinedData.category,\n        receivedDate: combinedData.receivedDate,\n        gmailUrl: combinedData.gmailUrl,\n        summary: combinedData.summary,\n        actions: combinedData.actions,\n        isSummary: false,\n      },\n    };\n    \n    perEmailOutputs.push(outputItem);\n  } catch (error) {\n    console.error(\"Error processing email item:\", error);\n    aggregationStats.errors++;\n  }\n}\n\n/**\n * Creates daily summary message from aggregation stats\n * @param {Object} stats - Aggregation statistics\n * @returns {Object} Summary message object\n */\nfunction createDailySummary(stats) {\n  const finishedAt = new Date().toLocaleString();\n  \n  // Handle no emails case\n  if (stats.total === 0) {\n    return {\n      message: \"\ud83d\udce7 Daily Gmail scan complete \u2014 no new emails found.\",\n      totalEmails: 0,\n      importantEmails: 0,\n      byCategory: {},\n      errors: stats.errors,\n      parsingFailures: stats.parsingFailures,\n      finishedAt,\n      isSummary: true,\n    };\n  }\n  \n  // Build category breakdown\n  const categoryEntries = Array.from(stats.byCategory.entries())\n    .sort(([, a], [, b]) => b - a)\n    .map(([category, count]) => `\u2022 ${category}: ${count}`)\n    .join(\"\\n\");\n  \n  // Build top important emails list\n  const topImportantLines = stats.importantList\n    .slice(0, 5)\n    .map((email) => `- **${email.subject}** \u2014 ${email.from}`)\n    .join(\"\\n\");\n  \n  // Construct summary message\n  let summaryMessage = `\ud83d\udcca **Daily Gmail Summary**\\n\\n\ud83d\udce7 Total emails processed: ${stats.total}\\n\ud83d\udd34 Important emails: ${stats.important}`;\n  \n  if (stats.errors > 0) {\n    summaryMessage += `\\n\u26a0\ufe0f Processing errors: ${stats.errors}`;\n  }\n  \n  if (stats.parsingFailures > 0) {\n    summaryMessage += `\\n\u26a0\ufe0f Parsing failures: ${stats.parsingFailures}`;\n  }\n  \n  if (categoryEntries) {\n    summaryMessage += `\\n\\n**By category:**\\n${categoryEntries}`;\n  }\n  \n  if (topImportantLines) {\n    summaryMessage += `\\n\\n**Top important:**\\n${topImportantLines}`;\n  }\n  \n  summaryMessage += `\\n\\n\u2705 Individual summaries were sent above.\\n\\n_Scan completed at ${finishedAt}_`;\n  \n  return {\n    message: summaryMessage,\n    totalEmails: stats.total,\n    importantEmails: stats.important,\n    byCategory: Object.fromEntries(stats.byCategory),\n    errors: stats.errors,\n    parsingFailures: stats.parsingFailures,\n    finishedAt,\n    isSummary: true,\n  };\n}\n\n// Create and append daily summary\nconst summary = createDailySummary(aggregationStats);\nconst summaryItem = {\n  json: summary,\n};\nperEmailOutputs.push(summaryItem);\n\nreturn perEmailOutputs;"
+        "jsCode": "// Single Code node: per-email Telegram messages + final daily summary\n// Parses text format from LLM and combines with email metadata from previous nodes\n\n// ---------- helpers ----------\n\n/**\n * Parses text response from LLM into structured data\n * @param {string} text - Raw text response from LLM\n * @returns {Object|null} Parsed data or null on failure\n */\nfunction parseTextResponse(text) {\n  if (!text || typeof text !== 'string') return null;\n  \n  const result = {\n    isImportant: false,\n    category: 'unknown',\n    summary: '',\n    actions: []\n  };\n  \n  const lines = text.trim().split('\\n');\n  let currentField = null;\n  let inActions = false;\n  \n  for (let line of lines) {\n    line = line.trim();\n    \n    // Check for end marker\n    if (line === '---') break;\n    \n    // Parse field lines\n    if (line.startsWith('Important:')) {\n      const value = line.substring('Important:'.length).trim().toLowerCase();\n      result.isImportant = value === 'yes' || value === 'true';\n      inActions = false;\n      currentField = null;\n    } else if (line.startsWith('Category:')) {\n      result.category = line.substring('Category:'.length).trim();\n      inActions = false;\n      currentField = null;\n    } else if (line.startsWith('Summary:')) {\n      result.summary = line.substring('Summary:'.length).trim();\n      currentField = 'summary';\n      inActions = false;\n    } else if (line.startsWith('Actions:')) {\n      inActions = true;\n      currentField = null;\n    } else if (inActions && line.startsWith('-')) {\n      // Parse action line\n      const action = line.substring(1).trim();\n      if (action && action.toLowerCase() !== 'none') {\n        result.actions.push(action);\n      }\n    } else if (currentField === 'summary' && line && !inActions) {\n      // Continue multi-line summary\n      result.summary += ' ' + line;\n    }\n  }\n  \n  return result;\n}\n\n/**\n * Cleans and normalizes sender name from email\n * @param {string} senderName - Raw sender name from email\n * @returns {string} Cleaned sender name\n */\nfunction cleanFromName(senderName) {\n  if (!senderName) return \"Unknown sender\";\n  \n  let cleaned = String(senderName).trim();\n  \n  // Remove email address in angle brackets\n  if (cleaned.includes(\"<\")) {\n    cleaned = cleaned.split(\"<\")[0].trim();\n  }\n  \n  // Remove domain after pipe\n  if (cleaned.includes(\"|\")) {\n    cleaned = cleaned.split(\"|\")[0].trim();\n  }\n  \n  // Remove surrounding quotes\n  cleaned = cleaned.replace(/^[\\\"']|[\\\"']$/g, \"\");\n  \n  return cleaned || \"Unknown sender\";\n}\n\n/**\n * Formats action items into markdown list with proper link handling\n * @param {Array<string>} actions - Array of action strings\n * @returns {string} Formatted actions block or empty string\n */\nfunction formatActions(actions) {\n  if (!Array.isArray(actions) || actions.length === 0) {\n    return \"\";\n  }\n  \n  const URL_REGEX = /https?:\\/\\/\\S+/;\n  \n  const formattedActions = actions\n    .map((action) => {\n      // Handle \"Label: URL\" format\n      if (action.includes(\":\")) {\n        const parts = action.split(\":\");\n        const label = parts[0].trim();\n        const rest = parts.slice(1).join(\":\").trim();\n        const urlMatch = rest.match(URL_REGEX);\n        \n        if (urlMatch) {\n          return `- [${label}](${urlMatch[0]})`;\n        }\n      }\n      \n      // Handle direct URL in text\n      const urlMatch = action.match(URL_REGEX);\n      if (urlMatch) {\n        return `- [Open link](${urlMatch[0]})`;\n      }\n      \n      // Plain text action\n      return `- ${action}`;\n    })\n    .filter(Boolean);\n  \n  return formattedActions.length > 0\n    ? `\\n\\nActions:\\n${formattedActions.join(\"\\n\")}`\n    : \"\";\n}\n\n/**\n * Creates formatted email message\n * @param {Object} data - Combined email data\n * @returns {string} Formatted message string\n */\nfunction createEmailMessage(data) {\n  const { from, subject, category, receivedDate, summary, actions, gmailUrl } = data;\n  const actionsBlock = formatActions(actions);\n  const formattedDate = new Date(receivedDate).toLocaleString();\n  \n  return `[${from}]: ${subject}\\nCategory: ${category}\\nReceived: ${formattedDate}\\n\\n${summary}${actionsBlock}\\n\\n[Open in Gmail](${gmailUrl})`;\n}\n\n// ---------- main ----------\nconst items = $input.all();\n\n// Early validation\nif (!items || !Array.isArray(items)) {\n  console.error(\"Invalid input: Expected array of items\");\n  return [\n    {\n      json: {\n        message: \"❌ Error: Invalid input data provided to email formatter\",\n        error: true,\n        isSummary: true,\n      },\n    },\n  ];\n}\n\nconst perEmailOutputs = [];\nconst aggregationStats = {\n  total: 0,\n  important: 0,\n  byCategory: new Map(),\n  importantList: [],\n  errors: 0,\n  parsingFailures: 0,\n};\n\nfor (const item of items) {\n  try {\n    // Handle both formats: items with or without .json wrapper\n    const data = item.json || item;\n    \n    console.log(\"Processing item:\", JSON.stringify(data).substring(0, 200));\n    \n    // Get LLM response text\n    const llmResponse = data.response;\n    \n    if (!llmResponse) {\n      console.warn(\"Skipping item with no LLM response. Available keys:\", Object.keys(data));\n      aggregationStats.errors++;\n      continue;\n    }\n    \n    // Parse LLM text response\n    const parsedData = parseTextResponse(llmResponse);\n    \n    if (!parsedData) {\n      console.error(`Failed to parse LLM response. Preview: ${llmResponse.substring(0, 100)}...`);\n      aggregationStats.parsingFailures++;\n      aggregationStats.errors++;\n      continue;\n    }\n    \n    // Get email metadata\n    const from = cleanFromName(data.fromName || \"Unknown sender\");\n    const subject = data.subject || \"No subject\";\n    const gmailUrl = data.gmailUrl || \"#\";\n    const receivedDate = data.internalDate || new Date().toISOString();\n    \n    // Combine LLM analysis with email metadata\n    const combinedData = {\n      isImportant: parsedData.isImportant,\n      category: parsedData.category || \"unknown\",\n      summary: parsedData.summary || \"No summary available\",\n      actions: parsedData.actions || [],\n      from,\n      subject,\n      gmailUrl,\n      receivedDate,\n    };\n    \n    // Update aggregation stats\n    aggregationStats.total++;\n    if (combinedData.isImportant) {\n      aggregationStats.important++;\n      aggregationStats.importantList.push({\n        subject: combinedData.subject,\n        from: combinedData.from,\n      });\n    }\n    \n    // Track categories\n    const currentCount = aggregationStats.byCategory.get(combinedData.category) || 0;\n    aggregationStats.byCategory.set(combinedData.category, currentCount + 1);\n    \n    // Create formatted message\n    const message = createEmailMessage(combinedData);\n    \n    const outputItem = {\n      json: {\n        message,\n        isImportant: combinedData.isImportant,\n        subject: combinedData.subject,\n        from: combinedData.from,\n        category: combinedData.category,\n        receivedDate: combinedData.receivedDate,\n        gmailUrl: combinedData.gmailUrl,\n        summary: combinedData.summary,\n        actions: combinedData.actions,\n        isSummary: false,\n      },\n    };\n    \n    perEmailOutputs.push(outputItem);\n  } catch (error) {\n    console.error(\"Error processing email item:\", error);\n    aggregationStats.errors++;\n  }\n}\n\n/**\n * Creates daily summary message from aggregation stats\n * @param {Object} stats - Aggregation statistics\n * @returns {Object} Summary message object\n */\nfunction createDailySummary(stats) {\n  const finishedAt = new Date().toLocaleString();\n  \n  // Handle no emails case\n  if (stats.total === 0) {\n    return {\n      message: \"📧 Daily Gmail scan complete — no new emails found.\",\n      totalEmails: 0,\n      importantEmails: 0,\n      byCategory: {},\n      errors: stats.errors,\n      parsingFailures: stats.parsingFailures,\n      finishedAt,\n      isSummary: true,\n    };\n  }\n  \n  // Build category breakdown\n  const categoryEntries = Array.from(stats.byCategory.entries())\n    .sort(([, a], [, b]) => b - a)\n    .map(([category, count]) => `• ${category}: ${count}`)\n    .join(\"\\n\");\n  \n  // Build top important emails list\n  const topImportantLines = stats.importantList\n    .slice(0, 5)\n    .map((email) => `- **${email.subject}** — ${email.from}`)\n    .join(\"\\n\");\n  \n  // Construct summary message\n  let summaryMessage = `📊 **Daily Gmail Summary**\\n\\n📧 Total emails processed: ${stats.total}\\n🔴 Important emails: ${stats.important}`;\n  \n  if (stats.errors > 0) {\n    summaryMessage += `\\n⚠️ Processing errors: ${stats.errors}`;\n  }\n  \n  if (stats.parsingFailures > 0) {\n    summaryMessage += `\\n⚠️ Parsing failures: ${stats.parsingFailures}`;\n  }\n  \n  if (categoryEntries) {\n    summaryMessage += `\\n\\n**By category:**\\n${categoryEntries}`;\n  }\n  \n  if (topImportantLines) {\n    summaryMessage += `\\n\\n**Top important:**\\n${topImportantLines}`;\n  }\n  \n  summaryMessage += `\\n\\n✅ Individual summaries were sent above.\\n\\n_Scan completed at ${finishedAt}_`;\n  \n  return {\n    message: summaryMessage,\n    totalEmails: stats.total,\n    importantEmails: stats.important,\n    byCategory: Object.fromEntries(stats.byCategory),\n    errors: stats.errors,\n    parsingFailures: stats.parsingFailures,\n    finishedAt,\n    isSummary: true,\n  };\n}\n\n// Create and append daily summary\nconst summary = createDailySummary(aggregationStats);\nconst summaryItem = {\n  json: summary,\n};\nperEmailOutputs.push(summaryItem);\n\nreturn perEmailOutputs;"
       },
-      "id": "2a3abdce-9ab3-44bb-85e4-547c9268bf45",
+      "id": "0f34378f-c426-464b-bfd0-26f6806f7f08",
       "name": "Format for Telegram",
       "type": "n8n-nodes-base.code",
       "position": [
-        3456,
-        1328
+        0,
+        0
       ],
       "typeVersion": 2
     },
     {
       "parameters": {
         "chatId": "={{ 219678893 }}",
-        "text": "=\u23f3 Processing email...\n\ud83d\udcec From: {{ $json.fromName }} | {{ $json.fromAddress }}\n\ud83d\udcdd Subject: {{ $json.subject }}\n\ud83e\udd16 Model: {{ $json.model }}",
+        "text": "=⏳ Processing email...\n📬 From: {{ $json.fromName }} | {{ $json.fromAddress }}\n📝 Subject: {{ $json.subject }}\n🤖 Model: {{ $json.model }}",
         "additionalFields": {
           "appendAttribution": false,
           "disable_notification": true
         }
       },
-      "id": "fca431a1-dc5f-4604-b745-2a025ab4d327",
+      "id": "69f2cf25-d35e-4896-acba-e00347ee3831",
       "name": "Notify Processing Started",
       "type": "n8n-nodes-base.telegram",
       "position": [
-        3824,
-        1520
+        368,
+        192
       ],
       "webhookId": "notify-start-webhook",
       "typeVersion": 1.2,
@@ -284,12 +284,12 @@
           "timeout": 80000000
         }
       },
-      "id": "35b3b955-da61-4293-a127-0b4407c72f11",
+      "id": "7f59eac2-95cf-44f4-8f8c-ca648d0278c7",
       "name": "Summarise Email with LLM",
       "type": "n8n-nodes-base.httpRequest",
       "position": [
-        3616,
-        1728
+        160,
+        400
       ],
       "typeVersion": 4.2
     },
@@ -298,30 +298,30 @@
         "mode": "runOnceForEachItem",
         "jsCode": "// Calculate processing metrics after LLM response\n\n// Get start time from the \"Add Start Timestamp\" node\nconst startTimeMs = $json.startTimeMs;\nconst endTimeMs = Date.now();\nconst durationMs = endTimeMs - startTimeMs;\nconst durationSec = Math.round(durationMs / 1000);\nconst durationMin = (durationSec / 60).toFixed(2);\n\n// Extract LLM metrics from Ollama response\nconst promptTokens = $json.prompt_eval_count || 0;\nconst outputTokens = $json.eval_count || 0;\nconst totalTokens = promptTokens + outputTokens;\n\n// Calculate tokens per second using Ollama's timing data\nconst promptEvalDuration = $json.prompt_eval_duration || 1;\nconst evalDuration = $json.eval_duration || 1;\nconst promptTokensPerSec = (promptTokens / (promptEvalDuration / 1000000000)).toFixed(2);\nconst outputTokensPerSec = (outputTokens / (evalDuration / 1000000000)).toFixed(2);\n\n// Format duration for display\nlet durationDisplay;\nif (durationSec < 60) {\n  durationDisplay = `${durationSec}s`;\n} else if (durationSec < 3600) {\n  durationDisplay = `${durationMin}m`;\n} else {\n  const hours = Math.floor(durationSec / 3600);\n  const mins = Math.floor((durationSec % 3600) / 60);\n  durationDisplay = `${hours}h ${mins}m`;\n}\n\n// Get email metadata from Loop Over Emails node\nconst fromName = $json.fromName;\nconst subject = $json.subject;\n\nreturn {\n  json: {\n    response: $json.response,\n    fromName,\n    subject,\n    durationMs,\n    durationSec,\n    durationMin,\n    durationDisplay,\n    promptTokens,\n    outputTokens,\n    totalTokens,\n    promptTokensPerSec,\n    outputTokensPerSec,\n    // Include original timing data from Ollama (in seconds)\n    totalDurationSec: (($json.total_duration || 0) / 1000000000).toFixed(2),\n    loadDurationSec: (($json.load_duration || 0) / 1000000000).toFixed(2),\n    promptEvalDurationSec: (($json.prompt_eval_duration || 0) / 1000000000).toFixed(2),\n    evalDurationSec: (($json.eval_duration || 0) / 1000000000).toFixed(2)\n  }\n};"
       },
-      "id": "b4897528-4439-47c6-9b1a-560465665de7",
+      "id": "611bcae0-c99a-4dd6-a94f-b5e09223fdc6",
       "name": "Calculate Metrics",
       "type": "n8n-nodes-base.code",
       "position": [
-        4016,
-        1648
+        560,
+        320
       ],
       "typeVersion": 2
     },
     {
       "parameters": {
         "chatId": "={{ 219678893 }}",
-        "text": "=\u2705 Completed processing\n\ud83d\udcec From: {{ $json.fromName }}\n\ud83d\udcdd Subject: {{ $json.subject }}\n\n\u23f1\ufe0f Total Duration: {{ $json.totalDurationSec }}s (~{{ Math.round($json.totalDurationSec / 60) }}m)\n\u251c\u2500 Load Model: {{ $json.loadDurationSec }}s\n\u251c\u2500 Process Prompt: {{ $json.promptEvalDurationSec }}s\n\u2514\u2500 Generate Response: {{ $json.evalDurationSec }}s\n\n\ud83d\udd22 Tokens: {{ $json.totalTokens }} total\n\u251c\u2500 Prompt: {{ $json.promptTokens }} tokens @ {{ $json.promptTokensPerSec }} tok/s\n\u2514\u2500 Output: {{ $json.outputTokens }} tokens @ {{ $json.outputTokensPerSec }} tok/s",
+        "text": "=✅ Completed processing\n📬 From: {{ $json.fromName }}\n📝 Subject: {{ $json.subject }}\n\n⏱️ Total Duration: {{ $json.totalDurationSec }}s (~{{ Math.round($json.totalDurationSec / 60) }}m)\n├─ Load Model: {{ $json.loadDurationSec }}s\n├─ Process Prompt: {{ $json.promptEvalDurationSec }}s\n└─ Generate Response: {{ $json.evalDurationSec }}s\n\n🔢 Tokens: {{ $json.totalTokens }} total\n├─ Prompt: {{ $json.promptTokens }} tokens @ {{ $json.promptTokensPerSec }} tok/s\n└─ Output: {{ $json.outputTokens }} tokens @ {{ $json.outputTokensPerSec }} tok/s",
         "additionalFields": {
           "appendAttribution": false,
           "disable_notification": true
         }
       },
-      "id": "62364fb0-8453-4aac-ae58-29219726146b",
+      "id": "242db89e-7dcf-48a7-9b08-ac075b527d4f",
       "name": "Notify Processing Complete",
       "type": "n8n-nodes-base.telegram",
       "position": [
-        4192,
-        1648
+        736,
+        320
       ],
       "webhookId": "notify-complete-webhook",
       "typeVersion": 1.2,
@@ -349,10 +349,10 @@
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        3264,
-        1568
+        -192,
+        240
       ],
-      "id": "346d5107-1133-4015-a649-210a742d7c7a",
+      "id": "550bde6a-342f-461e-b50d-60688a77bbfc",
       "name": "Set model",
       "alwaysOutputData": false
     },
@@ -376,29 +376,29 @@
         },
         "options": {}
       },
-      "id": "38177709-703f-4b72-bc12-0366e5d48806",
+      "id": "5b76226a-7d73-4438-8958-65f8d600a585",
       "name": "Set Start Timestamp",
       "type": "n8n-nodes-base.set",
       "position": [
-        3264,
-        1712
+        -192,
+        384
       ],
       "typeVersion": 3.4
     },
     {
       "parameters": {
         "chatId": "={{ 219678893 }}",
-        "text": "\ud83d\udce7 Daily Gmail scan complete - no new emails found.",
+        "text": "📧 Daily Gmail scan complete - no new emails found.",
         "additionalFields": {
           "appendAttribution": false
         }
       },
-      "id": "ba45a510-3296-48b5-8426-328007f76113",
+      "id": "d2c1c1b7-a933-4eb6-892c-13e6857ecb6c",
       "name": "Notify No Emails",
       "type": "n8n-nodes-base.telegram",
       "position": [
-        2832,
-        1568
+        -784,
+        240
       ],
       "webhookId": "ea8088a1-7a12-4dc2-b691-9e3d3d37cab1",
       "typeVersion": 1.2,
@@ -417,12 +417,12 @@
           "appendAttribution": false
         }
       },
-      "id": "89451846-ab56-4a59-a654-c81341ad29c8",
+      "id": "cfdc40bb-e63d-45d3-9e00-45b6ec1bfac2",
       "name": "Notify Summary",
       "type": "n8n-nodes-base.telegram",
       "position": [
-        3824,
-        1328
+        368,
+        0
       ],
       "webhookId": "bb5d0404-e164-49b9-8f65-2df8d5aa2e10",
       "typeVersion": 1.2,
@@ -442,10 +442,10 @@
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3.2,
       "position": [
-        3824,
-        1728
+        368,
+        400
       ],
-      "id": "c5083cae-477d-4bd1-bebc-614aa1ce8c70",
+      "id": "4325b8d1-1dbe-4f76-864a-f7171515a272",
       "name": "Merge Model Output"
     },
     {
@@ -458,10 +458,10 @@
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3.2,
       "position": [
-        3456,
-        1504
+        0,
+        176
       ],
-      "id": "0a62a7db-89eb-4f3e-9b6b-0e7202535570",
+      "id": "dae1edd4-5f96-4dfa-b6fc-5010b8931482",
       "name": "Merge Model Input"
     },
     {
@@ -472,31 +472,15 @@
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3.2,
       "position": [
-        4368,
-        1808
+        912,
+        480
       ],
-      "id": "cd8acaa0-2f42-4784-ae53-6453c531756d",
+      "id": "beacdb93-ae7e-4513-8e62-9d4af8364368",
       "name": "Use Model Output"
     }
   ],
   "pinData": {},
   "connections": {
-    "Ollama Chat Model": {
-      "ai_languageModel": [
-        [
-          {
-            "node": "AI Agent",
-            "type": "ai_languageModel",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "AI Agent": {
-      "main": [
-        []
-      ]
-    },
     "Schedule Trigger": {
       "main": [
         [
@@ -596,11 +580,6 @@
             "index": 0
           }
         ]
-      ]
-    },
-    "Notify Processing Started": {
-      "main": [
-        []
       ]
     },
     "Summarise Email with LLM": {
@@ -707,19 +686,15 @@
       ]
     }
   },
-  "active": false,
+  "active": true,
   "settings": {
-    "executionOrder": "v1",
-    "saveExecutionProgress": true,
-    "callerPolicy": "workflowsFromSameOwner",
-    "availableInMCP": false,
-    "errorWorkflow": "5YHHqqqLCxRFvISB"
+    "executionOrder": "v1"
   },
-  "versionId": "147fd2bd-1f81-4017-8e57-cdb56abd3db8",
+  "versionId": "2fe17c13-65af-4d2e-8b2c-0a0a22b1b633",
   "meta": {
     "instanceId": "f6850b7a742915e4beea1da1d7e81ab301286f32549db44a9ced290422cc1c31"
   },
-  "id": "7bLE5ERoJS3R6hwf",
+  "id": "GUHVqOQka7XQbSf7",
   "tags": [
     {
       "createdAt": "2024-01-01T00:00:00.000Z",
