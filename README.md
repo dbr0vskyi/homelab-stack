@@ -1,111 +1,136 @@
-# 🏠 Homelab Automation Stack
+# Homelab Automation Stack
 
-Self-hosted automation platform for Raspberry Pi 5/macOS. Automate workflows with n8n, Telegram, Notion, Gmail, and local LLMs.
+Self-hosted automation platform for Raspberry Pi 5 and macOS. Build AI-powered workflows with n8n, local LLMs (Ollama), and integrate with popular services like Telegram, Notion, and Gmail.
 
-## ✨ Features
+## Features
 
-- 📱 **Telegram → Notion**: Convert messages to tasks with AI processing
-- 📧 **Gmail Summaries**: Daily email digests via Telegram
-- 🤖 **Local LLMs**: Privacy-first AI processing with Ollama
-- 🔄 **Containerized**: Fully dockerized with automated backups
-- 🌐 **Secure Access**: Optional Tailscale integration
+- **Local AI Processing**: Privacy-first LLM inference with Ollama (no cloud dependencies)
+- **Workflow Automation**: Visual workflow builder with n8n for complex automations
+- **Fully Containerized**: Docker-based stack with persistent volumes and automated backups
+- **Secure Remote Access**: Optional Tailscale integration for external webhooks
+- **Monitoring Built-in**: Prometheus and Grafana for system and thermal tracking
+- **Production-Ready**: Comprehensive timeout handling for long-running LLM operations
 
-## 🛠️ Stack
+## Stack Components
 
 - **n8n** - Workflow automation platform
-- **PostgreSQL** - Reliable database backend
-- **Ollama** - Local LLM inference
+- **PostgreSQL** - Database backend for n8n workflows and execution history
+- **Ollama** - Local LLM inference server
 - **Prometheus + Grafana** - Monitoring and thermal tracking
 - **Tailscale** - Zero-trust network access (optional)
+- **Redis** - Caching and rate limiting (optional)
+- **Watchtower** - Automatic container updates (optional)
 
 ## 🚀 Quick Start
 
 ```bash
-# 1. Clone repository
+# Clone repository
 git clone <your-repo> homelab-stack && cd homelab-stack
 
-# 2. Setup everything
+# Run setup script (checks prerequisites, generates config, starts services)
 ./scripts/setup.sh
 
-# 3. Configure APIs
+# Configure API credentials
 cp .env.example .env
 nano .env  # Add your tokens
 ```
 
-**Required**: `TELEGRAM_BOT_TOKEN` from [@BotFather](https://t.me/BotFather)  
-**Optional**: Notion and Gmail API tokens
+**Access Points**:
+- n8n UI: `https://localhost:8443`
+- Ollama API: `http://localhost:11434`
+- Grafana: `http://localhost:3000` (if monitoring enabled)
 
-**Access**: n8n at `https://localhost:8443`, Ollama at `http://localhost:11434`
+**See**: [Setup Guide](docs/setup-guide.md) for detailed installation instructions and [API Setup](docs/api-setup.md) for credential configuration.
 
-## 📋 Management
+## Management
 
-```bash
-./scripts/manage.sh status          # Check services
-./scripts/manage.sh logs            # View logs
-./scripts/manage.sh exec-latest     # Show workflow executions
-./scripts/backup.sh                 # Create backup
-
-# Monitoring commands (included by default)
-./scripts/manage.sh monitoring-*    # Monitoring management commands
-
-# External access
-./scripts/setup.sh funnel          # Enable external webhooks
-```
-
-Run any script without arguments to see all options.
-
-## 🔧 Hardware Recommendations
-
-**This project uses a Raspberry Pi 5 with 16GB RAM** - ideal for running larger models like qwen2.5:14b.
-
-| Device            | RAM  | Models                         | Performance                      |
-| ----------------- | ---- | ------------------------------ | -------------------------------- |
-| **Pi 5 4GB**      | 4GB  | `llama3.2:1b`                  | Basic automation                 |
-| **Pi 5 8GB**      | 8GB  | `llama3.1:8b`                  | Good performance                 |
-| **Pi 5 16GB** ⭐  | 16GB | `qwen2.5:14b` to `qwen2.5:32b` | High performance (current setup) |
-| **Apple Silicon** | 8GB+ | Any models                     | Excellent                        |
-
-## 📚 Documentation
-
-- [🚀 **Setup Guide**](docs/setup-guide.md) - Complete installation walkthrough
-- [🌐 **Tailscale Setup**](docs/tailscale-setup.md) - SSL certificates and external access
-- [🔗 **API Configuration**](docs/api-setup.md) - Telegram, Notion, Gmail setup
-- [⚡ **Workflow Management**](docs/workflows.md) - Import/export and examples
-- [🖥️ **Hardware Optimization**](docs/hardware-setup.md) - Platform-specific tuning
-- [📊 **Monitoring Setup**](docs/monitoring.md) - Thermal monitoring and performance tracking
-
-## ⏱ Long-Running LLM Calls
-
-**Current Approach**: All workflows use the **HTTP Request node** to communicate directly with self-hosted Ollama at `http://ollama:11434/api/generate`.
-
-**Why HTTP Request instead of AI Agent?**
-
-On Raspberry Pi, LLM inference can take several minutes for complex prompts. The HTTP Request node provides:
-
-- **Flexible timeout control**: Set explicit timeouts per request (e.g., `"timeout": 3600000` for 1 hour)
-- **Direct API access**: Full control over Ollama parameters (temperature, top_p, repeat_penalty, num_threads)
-- **Predictable behavior**: No abstraction layers that might interfere with long-running calls
-
-**AI Agent Node Status**: Support for AI Agent is not currently a top priority, but will be considered for future iterations. Several approaches were attempted with only partial success due to timeout configuration limitations in AI Agent's architecture when working with self-hosted LLMs.
-
-**Timeout Patch**: The stack includes [n8n-timeout-patch](https://github.com/Piggeldi2013/n8n-timeout-patch) to extend global timeout limits, ensuring workflows don't terminate during long LLM operations:
-
-- **Workflow execution**: 12 hours (`N8N_WORKFLOW_TIMEOUT=43200`)
-- **LLM response headers**: 3 hours (`FETCH_HEADERS_TIMEOUT=10800000`)
-- **LLM body streaming**: 12 hours (`FETCH_BODY_TIMEOUT=43200000`)
-
-**Example**: See `workflows/gmail-to-telegram.json` node "Summarise Email with LLM" for HTTP Request configuration with Ollama.
-
-## �🚨 Troubleshooting
+Common operations via management scripts:
 
 ```bash
-./scripts/manage.sh diagnose    # Full system check
-./scripts/manage.sh restart     # Restart services
-docker compose logs -f n8n      # View n8n logs
+./scripts/manage.sh status       # Check service health
+./scripts/manage.sh logs n8n     # View logs
+./scripts/manage.sh restart      # Restart services
+./scripts/backup.sh              # Create full backup
 ```
 
-**Common Issues**: Port conflicts, SSL certificates, webhook setup → See setup guide
+**Workflow Management**:
+```bash
+./scripts/manage.sh import-workflows   # Import workflow JSON files
+./scripts/manage.sh export-workflows   # Export workflows to files
+./scripts/manage.sh exec-latest        # View execution history
+```
 
-## 📄 License
+Run any script without arguments to see all available options.
 
-MIT License - For personal use. Review security before internet exposure.
+**See**: [Workflow Documentation](docs/workflows/) for detailed workflow management and [Monitoring Guide](docs/monitoring.md) for observability setup.
+
+## Hardware Requirements
+
+**Current Setup**: Raspberry Pi 5 with 16GB RAM (recommended for production use)
+
+**Minimum**:
+- Raspberry Pi 5 (4GB RAM) or Apple Silicon Mac
+- 32GB storage (SD card or SSD)
+- Network connectivity
+
+**Recommended**:
+- Raspberry Pi 5 with 8GB+ RAM or Apple Silicon Mac
+- 64GB+ SSD storage for better performance
+- Active cooling for sustained LLM workloads
+
+Model performance scales with available RAM - see [Hardware Setup Guide](docs/hardware-setup.md) for detailed recommendations and optimization.
+
+## Documentation
+
+**Getting Started**:
+- [Setup Guide](docs/setup-guide.md) - Complete installation walkthrough
+- [API Configuration](docs/api-setup.md) - Telegram, Notion, Gmail credential setup
+- [Hardware Setup](docs/hardware-setup.md) - Platform-specific optimization
+
+**Workflows**:
+- [Workflow Documentation](docs/workflows/) - Individual workflow guides and management
+- [Email Sanitization](docs/email-sanitization.md) - Email processing implementation
+- [Investigation System](docs/investigation-system.md) - Workflow debugging tools
+
+**Operations**:
+- [Monitoring Setup](docs/monitoring.md) - Prometheus, Grafana, and thermal tracking
+- [Tailscale Setup](docs/tailscale-setup.md) - External webhook access
+- [Roadmap](docs/roadmap.md) - Planned features and improvements
+
+## Architecture Notes
+
+### LLM Integration
+
+Workflows use **HTTP Request nodes** to communicate directly with Ollama (`http://ollama:11434/api/generate`) instead of n8n's AI Agent node. This provides:
+
+- Flexible timeout control for long-running inference (minutes to hours on Raspberry Pi)
+- Direct API access with full control over Ollama parameters
+- Predictable behavior without abstraction layer limitations
+
+### Timeout Configuration
+
+The stack includes custom timeout patches to support extended LLM operations:
+- Workflow execution: 12 hours
+- HTTP request timeouts: configurable per request
+- Fetch API timeouts: extended for streaming responses
+
+**Implementation details**: See [CLAUDE.md](CLAUDE.md) for architecture documentation and timeout configuration.
+
+## Troubleshooting
+
+```bash
+./scripts/manage.sh diagnose    # Full system diagnostic
+./scripts/manage.sh restart     # Restart all services
+./scripts/manage.sh logs n8n    # View service logs
+```
+
+**Common Issues**:
+- Port conflicts or SSL certificate errors → [Setup Guide](docs/setup-guide.md)
+- Workflow execution failures → [Workflow Documentation](docs/workflows/)
+- LLM timeout or performance issues → [Hardware Setup](docs/hardware-setup.md)
+
+Use the investigation system for detailed workflow debugging: `/diagnose-workflow <execution-id>` or `/investigate <execution-id>`
+
+## License
+
+MIT License - For personal use. Review security settings before exposing to the internet.
