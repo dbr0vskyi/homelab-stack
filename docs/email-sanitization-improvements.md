@@ -572,7 +572,7 @@ function removeEmailSignature(text) {
 
 ## Implementation Priority
 
-### Phase 1: Critical (Next Deployment)
+### Phase 1: Critical ✅ COMPLETED (2025-11-08)
 1. ✅ Pre-sanitization size filtering (prevent 100KB+ emails)
 2. ✅ Enhanced HTML entity decoding (fix Polish characters)
 3. ✅ HTML comment & base64 image removal (big token savings)
@@ -580,6 +580,7 @@ function removeEmailSignature(text) {
 
 **Effort**: 30 minutes
 **Expected Impact**: 15-20% additional token reduction, zero character encoding issues
+**Status**: Deployed in workflow v1.1 on 2025-11-08
 
 ### Phase 2: Medium Priority (Within 1 Week)
 5. ✅ Email complexity scoring (enable intelligent routing)
@@ -656,6 +657,94 @@ After Phase 1 implementation:
 
 ---
 
+## Testing Checklist
+
+After implementing improvements, verify:
+
+- [ ] Workflow imports without errors
+- [ ] "Clean Email Input" node visible in workflow
+- [ ] Connections: Map Email Fields → Clean Email Input → Loop Over Emails
+- [ ] Manual test execution completes successfully
+- [ ] Sanitization statistics logged to console
+- [ ] Email summaries in Telegram are clean (no HTML)
+- [ ] Polish emails return English summaries
+- [ ] Processing time <10 minutes for 3 emails
+- [ ] No JSON parsing failures
+- [ ] Context window set to 8192 in LLM node
+- [ ] No garbled characters in multilingual emails
+- [ ] 100KB+ emails are skipped gracefully
+- [ ] Base64 images are removed from promotional emails
+- [ ] Promotional emails are detected correctly (90%+ rate)
+
+---
+
+## Troubleshooting
+
+### Issue: Emails Still Have HTML Artifacts
+
+**Possible Causes**:
+1. Node not in execution path (check connections)
+2. Node disabled (check node settings in UI)
+3. Error in sanitization code (check execution logs)
+
+**Debugging**:
+```bash
+# Check execution details
+./scripts/manage.sh exec-details <execution-id>
+
+# Look for "Clean Email Input" node in execution data
+./scripts/manage.sh exec-parse <execution-id> --node "Clean Email Input"
+```
+
+### Issue: Garbled Characters in Polish/German Emails
+
+**Cause**: HTML entity not in decoding list
+
+**Solution**: Add missing entity to `cleanHTML()` function entities object
+
+### Issue: Promotional Emails Not Being Detected
+
+**Cause**: Sender domain or keyword pattern not in detection list
+
+**Solution**:
+1. Check email sender and subject in execution logs
+2. Add new pattern to `isPromotional()` function
+3. Adjust threshold if needed (currently 3 product mentions)
+
+### Issue: Sanitization Statistics Not Showing in Logs
+
+**Cause**: Need to view node execution logs
+
+**Solution**:
+```bash
+# Check n8n container logs during execution
+docker compose logs -f n8n | grep "Sanitized"
+```
+
+### Issue: 100KB+ Email Not Skipped
+
+**Cause**: Pre-filter check not working
+
+**Solution**: Verify `MAX_RAW_EMAIL_SIZE` constant is set correctly at start of `sanitizeEmail()` function
+
+### Issue: Processing Time Still Too Long
+
+**Possible Causes**:
+1. Complexity scoring not working (check console logs for score)
+2. Large emails not being truncated properly
+3. Too many product blocks extracted from promotional emails
+
+**Debugging**:
+```bash
+# Check complexity scores
+./scripts/manage.sh exec-parse <execution-id> --node "Clean Email Input" | grep complexityScore
+
+# Check cleaned text length
+./scripts/manage.sh exec-parse <execution-id> --node "Clean Email Input" | grep cleanedLength
+```
+
+---
+
 ## Summary
 
 **Recommended Immediate Actions**:
@@ -673,6 +762,8 @@ After Phase 1 implementation:
 
 ---
 
-**Version**: 1.1 (Proposed)
+**Version**: 1.2 (Phase 1 Complete, Phase 2-3 Proposed)
 **Based on**: 7 investigation reports (191, 193, 195, 197, 198, 200, 278)
-**Last Updated**: 2025-11-08
+**Last Updated**: 2025-11-09
+**Phase 1 Status**: ✅ Completed and deployed 2025-11-08
+**Phase 2-3 Status**: Proposed for future implementation
