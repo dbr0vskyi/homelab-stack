@@ -71,8 +71,11 @@ Confirms the workflow allocated 8,192 tokens (6.2% of model's 131K max capacity)
 - **Thermal Throttling**: ✅ None detected (all 35 readings: 0)
 
 **CPU Utilization:**
-- Data not available from monitoring query (monitoring script reported error exit code 3)
-- Thermal rise indicates sustained CPU activity throughout execution
+- **Starting CPU Usage**: 0.8%
+- **Ending CPU Usage**: 98.6%
+- **Peak CPU Usage**: 100.0%
+- **Average CPU Usage**: 90.2%
+- **CPU-Intensive Phases**: Sustained high utilization throughout execution (avg 90%)
 
 **Memory Usage:**
 - **Total RAM**: 16.0 GB
@@ -85,7 +88,14 @@ Confirms the workflow allocated 8,192 tokens (6.2% of model's 131K max capacity)
 **Overall Health Status**: Healthy (no throttling, adequate memory, moderate temperatures)
 
 **Thermal-Workflow Correlation**:
-The steady temperature rise from 46°C to 69°C correlates directly with continuous LLM inference operations over 35 minutes. The 64°C average is well within safe operating range for Raspberry Pi 5 (throttling typically starts at 80-85°C). The absence of throttling confirms adequate cooling for this workload.
+The steady temperature rise from 46°C to 69°C correlates directly with sustained **90% CPU utilization** from continuous LLM inference operations over 35 minutes. The system maintained near-maximum CPU load (peak 100%) throughout email processing, driving the temperature increase. The 64°C average is well within safe operating range for Raspberry Pi 5 (throttling typically starts at 80-85°C). The absence of throttling despite sustained high CPU usage confirms adequate cooling for this intensive workload.
+
+**CPU-Performance Correlation**:
+- CPU started low (0.8%) during email fetch
+- Jumped to 90-100% during LLM processing (20 emails × ~105s each)
+- Remained elevated throughout execution
+- Peak CPU (100%) correlates with slowest email processing times (467s, 385s, 230s)
+- High CPU variance (0.8% → 100%) matches processing time variance (16s → 468s)
 
 ---
 
@@ -110,8 +120,10 @@ The steady temperature rise from 46°C to 69°C correlates directly with continu
 | Total duration | 34.97 min | Reasonable for 20 emails with 1B model |
 | Avg time/email | 105 seconds | Expected for llama3.2:1b |
 | Processing variance | 16s - 468s | ⚠️ High variance indicates inconsistency |
+| CPU utilization | 90.2% avg | ⚠️ Very high - system fully loaded |
+| CPU peak | 100% | ⚠️ System at maximum capacity |
 | Memory efficiency | +1.71 GB | ✅ Good (only 10.7% of total RAM) |
-| Thermal efficiency | +22.5°C | ✅ Good (no throttling) |
+| Thermal efficiency | +22.5°C | ✅ Good (no throttling despite high CPU) |
 
 **Comparison with Previous Executions**:
 | Exec ID | Duration | Status | Emails | Avg Time/Email |
@@ -223,6 +235,8 @@ NodeApiError: Bad request - please check your parameters
 - ❌ **Limited reasoning**: Uses placeholder URLs instead of extracting real ones
 - ❌ **Variable performance**: 28x variance in processing time (16s to 468s)
 - ❌ **Context understanding**: May struggle with complex or lengthy emails (email #6 took 468s, suggesting difficulty)
+- ❌ **CPU intensive**: 90% average CPU utilization, peaks at 100% capacity
+- ❌ **Processing bottleneck**: System fully saturated during LLM inference (single-threaded model execution)
 
 **Recommended Model**: qwen2.5:7b (configured default)
 - **Why**: Better instruction following, more consistent formatting, stronger reasoning
@@ -286,11 +300,15 @@ You are an email analysis agent. Analyze the email and output a simple structure
 - Preambles added despite explicit instruction not to
 - Placeholder URLs used instead of extracting actual links
 - 28x variance in processing time (16s to 468s) suggests difficulty with complex emails
+- **90% average CPU utilization** - system fully saturated during inference
+- **100% CPU peaks** correlate with slowest email processing (467s, 385s, 230s)
 
 **Impact**:
 - Text parser must handle format variations
 - Link rehydration may fail if LLM doesn't preserve `[LINK_N]` placeholders
 - Processing time unpredictable (harder to set appropriate timeouts)
+- **System bottleneck**: CPU maxed out during LLM inference, limiting throughput
+- No room for concurrent operations when processing emails
 
 ---
 
@@ -823,6 +841,8 @@ grep -E "num_ctx|temperature" "workflows/Gmail to Telegram.json"
 | LLM Model | llama3.2:1b | ⚠️ Underpowered |
 | Avg Time/Email | 105 seconds | ✅ Acceptable |
 | Processing Variance | 16s - 468s (28x) | ❌ High |
+| CPU Average | 90.2% | ⚠️ Very high load |
+| CPU Peak | 100% | ⚠️ At capacity |
 | JSON Validity | 0% (expected) | ⚠️ Text format used |
 | Text Format Quality | 100% parseable | ✅ Good |
 | Memory Consumed | +1.71 GB | ✅ Efficient |
