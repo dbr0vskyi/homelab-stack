@@ -5,7 +5,7 @@ Daily email digest with AI-powered summaries delivered to Telegram.
 ## Overview
 
 **Workflow File**: `workflows/Gmail to Telegram.json`
-**Trigger**: Schedule (Daily at 8am, configurable)
+**Trigger**: Schedule (Daily at 2am, configurable)
 **Status**: Active
 
 ## Purpose
@@ -15,7 +15,7 @@ Automatically processes unread Gmail messages, generates concise AI summaries, a
 ## Flow Diagram
 
 ```
-Schedule Trigger (8am daily)
+Schedule Trigger (2am daily)
   → Get Unread Emails (Gmail)
   → Any Emails? (Check)
   → Map Email Fields
@@ -88,8 +88,8 @@ Configure these in the n8n UI after importing:
 Edit the "Schedule Trigger" node to change the execution time:
 
 ```javascript
-// Default: Daily at 8am
-// Cron: 0 8 * * *
+// Default: Daily at 2am
+// Cron: 0 2 * * *
 ```
 
 ### Model Selection
@@ -257,6 +257,12 @@ For comprehensive analysis of issues:
 - **Investigation 191 (Oct 29, 2025)**: 25% parsing failures with llama3.2:3b due to lack of email sanitization
 - **Investigation 286 (Nov 10, 2025)**: 100% success rate with qwen2.5:7b after sanitization improvements
 - **Token reduction**: 70-80% reduction achieved through comprehensive sanitization
+
+**Known Issues (Under Improvement):**
+
+- ⚠️ **High importance rate**: Current prompts classify ~75% of emails as "important", which reduces filtering effectiveness
+- ⚠️ **Category misclassification**: Some emails are categorized incorrectly (e.g., promotional emails marked as personal)
+- 🔄 **Status**: Prompts will be gradually adjusted and tested to improve classification accuracy in future updates
 
 ## Related Documentation
 
