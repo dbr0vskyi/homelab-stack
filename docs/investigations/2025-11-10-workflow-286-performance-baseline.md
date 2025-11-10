@@ -42,7 +42,7 @@ Execution 286 represents a **successful baseline performance test** for the Gmai
 - **Average Time per Email**: 7.44 minutes (446 seconds)
 - **Model Used**: qwen2.5:7b (7.6B parameters, Q4_K_M quantization)
 - **Model Size**: 4.7 GB
-- **Context Window**: 32,768 tokens
+- **Context Window**: 8,192 tokens (configured via num_ctx; model supports up to 32,768)
 
 **Comparison with Previous Executions:**
 
@@ -125,7 +125,7 @@ The system handled the 2.5-hour workload without any critical issues:
 - **Parameters**: 7.6 billion
 - **Quantization**: Q4_K_M (4-bit quantized)
 - **Size**: 4.7 GB
-- **Context Window**: 32,768 tokens
+- **Context Window**: 8,192 tokens configured (model maximum: 32,768)
 - **Architecture**: Qwen 2.5 (Alibaba Cloud)
 
 **Task Suitability**: ⚠️ **Oversized for email summarization**
@@ -208,13 +208,18 @@ Total per email: ~650-1950 tokens
 Expected output: ~100-200 tokens
 ```
 
-**Context Usage**: The workflow uses a modest amount of context (~650-1950 tokens per email), well within the limits of even the smallest models:
+**Context Usage**: The workflow uses a modest amount of context (~650-1950 tokens per email), well within the configured limits:
 
-- qwen2.5:1.5b: 8,192 token context ✓
-- llama3.2:3b: 8,192 token context ✓
-- qwen2.5:7b: 32,768 token context (massive overkill)
+- Configured context (`num_ctx`): 8,192 tokens
+- Actual usage per email: ~650-1950 tokens (12-24% of configured context)
+- Model maximum capability: 32,768 tokens (not utilized)
 
-**Conclusion**: The 32K context window of qwen2.5:7b is completely unnecessary for this task. Smaller models with 8K context windows are more than sufficient.
+**Context Efficiency**:
+- qwen2.5:1.5b: 8,192 token context (same as current config) ✓
+- llama3.2:3b: 8,192 token context (same as current config) ✓
+- Current config: 8,192 tokens (appropriate, not overkill)
+
+**Conclusion**: The configured 8K context window is appropriate and efficient. Even this modest allocation provides 4-12x headroom beyond actual usage. The model's 32K maximum capability is unused and irrelevant to this workflow's performance.
 
 ### Prompt Effectiveness
 
@@ -845,6 +850,20 @@ docker compose exec -T ollama ollama show qwen2.5:7b
 
 **Token Efficiency**: Working scripts reduce investigation token usage by ~45% (from ~55K to ~30K tokens) by providing structured output instead of requiring manual data extraction and user questions.
 
+### Context Window Correction (2025-11-10)
+
+**Original Report Error**: The initial investigation incorrectly stated the workflow used a "32,768 token context window" based on the model's maximum capability.
+
+**Actual Configuration**: Analysis of the workflow JSON (`line 241: "num_ctx": 8192`) and Ollama runtime logs (`llama_context: n_ctx = 8192`) confirmed the workflow uses **8,192 tokens**, not 32K.
+
+**Corrected Sections**:
+- Execution Details (line 45): Now shows "8,192 tokens (configured via num_ctx; model supports up to 32,768)"
+- Model Performance Assessment (line 128): Updated to reflect actual configuration
+- Context Window Analysis (lines 211-222): Completely rewritten to distinguish between configured context (8K) and model maximum (32K)
+- Model Comparison Table (lines 871-880): Added "Configured" column to show actual allocation
+
+**Impact on Conclusions**: The correction doesn't change the core findings - the 8K configured context is still more than sufficient for the ~650-1950 tokens used per email. The performance issue remains the model size (7B parameters), not the context window configuration.
+
 ### Key Metrics Summary
 
 | Metric | Value | Status |
@@ -863,14 +882,16 @@ docker compose exec -T ollama ollama show qwen2.5:7b
 
 ### Model Comparison Table
 
-| Model | Parameters | Size | Context | Speed vs 7B | Best For |
-|-------|------------|------|---------|-------------|----------|
-| llama3.2:1b | 1.2B | 1.3 GB | 8K | **21x faster** | Simple tasks, max speed |
-| qwen2.5:1.5b | 1.5B | 986 MB | 8K | **21x faster** | Email summaries, speed-critical |
-| llama3.2:3b | 3.2B | 2.0 GB | 8K | **5-8x faster** | Balanced quality/speed |
-| **qwen2.5:7b** | 7.6B | 4.7 GB | 32K | **Baseline** | Complex reasoning (overkill) |
-| qwen2.5:14b | 14B | 9.0 GB | 32K | 0.5x (slower) | Very complex tasks |
-| codellama:13b | 13B | 7.4 GB | 16K | 0.5x (slower) | Code generation |
+| Model | Parameters | Size | Context (max) | Configured | Speed vs 7B | Best For |
+|-------|------------|------|---------------|------------|-------------|----------|
+| llama3.2:1b | 1.2B | 1.3 GB | 8K | 8K | **21x faster** | Simple tasks, max speed |
+| qwen2.5:1.5b | 1.5B | 986 MB | 8K | 8K | **21x faster** | Email summaries, speed-critical |
+| llama3.2:3b | 3.2B | 2.0 GB | 8K | 8K | **5-8x faster** | Balanced quality/speed |
+| **qwen2.5:7b** | 7.6B | 4.7 GB | 32K | **8K** | **Baseline** | Complex reasoning (overkill) |
+| qwen2.5:14b | 14B | 9.0 GB | 32K | 8K | 0.5x (slower) | Very complex tasks |
+| codellama:13b | 13B | 7.4 GB | 16K | 8K | 0.5x (slower) | Code generation |
+
+**Note**: All models in this workflow use `num_ctx: 8192` configuration. The "Context (max)" column shows each model's maximum capability, but the workflow only allocates 8K tokens regardless of model.
 
 ### Thermal Profile Data
 
