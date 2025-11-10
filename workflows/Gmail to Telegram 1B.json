@@ -14,10 +14,7 @@
       "id": "7f49dcc1-2ab4-46a6-a289-772b222c394c",
       "name": "Schedule Trigger",
       "type": "n8n-nodes-base.scheduleTrigger",
-      "position": [
-        -1376,
-        64
-      ],
+      "position": [-1376, 64],
       "typeVersion": 1.2
     },
     {
@@ -34,10 +31,7 @@
       "id": "62a1bd26-1b19-4aa0-b870-b5803ea47fa3",
       "name": "Get Unread Emails",
       "type": "n8n-nodes-base.gmail",
-      "position": [
-        -1184,
-        64
-      ],
+      "position": [-1184, 64],
       "webhookId": "de438789-71b6-421a-b4ec-c8ff234aa80f",
       "typeVersion": 2,
       "alwaysOutputData": true,
@@ -85,10 +79,7 @@
       "id": "641c0d67-b58f-4a3e-a160-588327243e7b",
       "name": "Any Emails?",
       "type": "n8n-nodes-base.if",
-      "position": [
-        -992,
-        64
-      ],
+      "position": [-992, 64],
       "typeVersion": 2,
       "alwaysOutputData": false
     },
@@ -151,10 +142,7 @@
       "id": "6c7b6749-98de-4812-93b7-9c1a192316e8",
       "name": "Map Email Fields",
       "type": "n8n-nodes-base.set",
-      "position": [
-        -784,
-        64
-      ],
+      "position": [-784, 64],
       "typeVersion": 3.4
     },
     {
@@ -164,10 +152,7 @@
       "id": "62dda468-9d28-41df-9331-36c069095678",
       "name": "Clean Email Input",
       "type": "n8n-nodes-base.code",
-      "position": [
-        -592,
-        64
-      ],
+      "position": [-592, 64],
       "typeVersion": 2
     },
     {
@@ -179,23 +164,17 @@
       "id": "bfcc081f-98c9-408b-92c5-01a93939e4f2",
       "name": "Loop Over Emails",
       "type": "n8n-nodes-base.splitInBatches",
-      "position": [
-        -384,
-        64
-      ],
+      "position": [-384, 64],
       "typeVersion": 3
     },
     {
       "parameters": {
-        "jsCode": "// Single Code node: per-email Telegram messages + final daily summary\n// Parses text format from LLM and combines with email metadata from previous nodes\n\n// ---------- helpers ----------\n\n/**\n * Escapes markdown special characters to prevent Telegram parsing errors\n * @param {string} text - Raw text that may contain markdown chars\n * @returns {string} Escaped text safe for Telegram markdown\n */\nfunction escapeMarkdown(text) {\n  if (!text || typeof text !== 'string') return '';\n\n  // Escape Telegram markdown special characters\n  // Order matters: backslash first, then others\n  return text\n    .replace(/\\\\/g, '\\\\\\\\')   // Backslash\n    .replace(/\\*/g, '\\\\*')    // Asterisk (bold)\n    .replace(/_/g, '\\\\_')     // Underscore (italic)\n    .replace(/\\[/g, '\\\\[')    // Opening bracket\n    .replace(/\\]/g, '\\\\]')    // Closing bracket\n    .replace(/\\(/g, '\\\\(')    // Opening parenthesis\n    .replace(/\\)/g, '\\\\)')    // Closing parenthesis\n    .replace(/~/g, '\\\\~')     // Tilde (strikethrough)\n    .replace(/`/g, '\\\\`')     // Backtick (code)\n    .replace(/>/g, '\\\\>')     // Greater than (quote)\n    .replace(/#/g, '\\\\#')     // Hash (heading)\n    .replace(/\\+/g, '\\\\+')    // Plus\n    .replace(/-/g, '\\\\-')     // Hyphen\n    .replace(/=/g, '\\\\=')     // Equals\n    .replace(/\\|/g, '\\\\|')    // Pipe\n    .replace(/\\{/g, '\\\\{')    // Opening brace\n    .replace(/\\}/g, '\\\\}')    // Closing brace\n    .replace(/\\./g, '\\\\.')    // Period\n    .replace(/!/g, '\\\\!');    // Exclamation\n}\n\n/**\n * Rehydrates link placeholders with actual URLs from urlMap\n * @param {string} text - Text containing [LINK_N] or LINK_N placeholders\n * @param {Array<string>} urlMap - Array of URLs extracted from email\n * @returns {string} Text with placeholders replaced by actual URLs\n */\nfunction rehydrateLinks(text, urlMap) {\n  if (!text || typeof text !== 'string') return text || '';\n  if (!urlMap || !Array.isArray(urlMap) || urlMap.length === 0) return text;\n  \n  // Track rehydration for logging\n  let replacedCount = 0;\n  const missingLinks = [];\n  \n  // Replace both [LINK_N] and LINK_N patterns\n  const rehydrated = text.replace(/\\[?LINK_(\\d+)\\]?/g, (match, index) => {\n    const arrayIndex = parseInt(index) - 1; // Convert 1-indexed to 0-indexed\n    \n    if (arrayIndex >= 0 && arrayIndex < urlMap.length && urlMap[arrayIndex]) {\n      replacedCount++;\n      return urlMap[arrayIndex];\n    } else {\n      // Link reference not found in urlMap\n      if (!missingLinks.includes(match)) {\n        missingLinks.push(match);\n      }\n      return match; // Keep original placeholder if not found\n    }\n  });\n  \n  // Log rehydration results\n  if (replacedCount > 0) {\n    console.log(`🔗 Rehydrated ${replacedCount} link reference(s)`);\n  }\n  if (missingLinks.length > 0) {\n    console.warn(`⚠️ Could not rehydrate: ${missingLinks.join(', ')} (urlMap has ${urlMap.length} entries)`);\n  }\n  \n  return rehydrated;\n}\n\n/**\n * Parses text response from LLM into structured data (updated for ### delimiter format)\n * @param {string} text - Raw text response from LLM\n * @param {Array<string>} urlMap - Array of URLs for rehydrating link placeholders\n * @returns {Object|null} Parsed data or null on failure\n */\nfunction parseTextResponse(text, urlMap) {\n  if (!text || typeof text !== 'string') return null;\n\n  // Remove any leading/trailing whitespace and potential preambles\n  let cleanText = text.trim();\n\n  // If response starts with a preamble, remove everything before first ###\n  const firstDelimiter = cleanText.indexOf('###');\n  if (firstDelimiter > 0) {\n    cleanText = cleanText.substring(firstDelimiter);\n    console.log(`Stripped preamble (${firstDelimiter} chars)`);\n  }\n\n  const result = {\n    isImportant: false,\n    category: 'other',\n    summary: '',\n    actions: []\n  };\n\n  // Parse fields using ### delimiters\n  const importantMatch = cleanText.match(/### Important[\\s\\n]+(Yes|No)/i);\n  if (importantMatch) {\n    result.isImportant = importantMatch[1].toLowerCase() === 'yes';\n  }\n\n  const categoryMatch = cleanText.match(/### Category[\\s\\n]+([^\\n#]+)/i);\n  if (categoryMatch) {\n    result.category = categoryMatch[1].trim().toLowerCase();\n  }\n\n  const summaryMatch = cleanText.match(/### Summary[\\s\\n]+([\\s\\S]+?)(?=\\n###|\\n---|$)/i);\n  if (summaryMatch) {\n    result.summary = summaryMatch[1].trim();\n  }\n\n  const actionsMatch = cleanText.match(/### Actions[\\s\\n]+([\\s\\S]+?)(?=\\n---|$)/i);\n  if (actionsMatch) {\n    const actionText = actionsMatch[1].trim();\n\n    if (actionText.toLowerCase() !== 'none') {\n      const lines = actionText.split('\\n');\n      for (let line of lines) {\n        line = line.trim();\n        if (line && !line.startsWith('#')) {\n          // Remove leading dashes or bullets\n          line = line.replace(/^[-*•]\\s*/, '');\n          if (line) {\n            const rehydrated = rehydrateLinks(line, urlMap);\n            result.actions.push(rehydrated);\n          }\n        }\n      }\n    }\n  }\n\n  // Rehydrate links in summary\n  if (result.summary) {\n    result.summary = rehydrateLinks(result.summary, urlMap);\n  }\n\n  return result;\n}\n}\n\n/**\n * Cleans and normalizes sender name from email\n * @param {string} senderName - Raw sender name from email\n * @returns {string} Cleaned sender name\n */\nfunction cleanFromName(senderName) {\n  if (!senderName) return \"Unknown sender\";\n  \n  let cleaned = String(senderName).trim();\n  \n  // Remove email address in angle brackets\n  if (cleaned.includes(\"<\")) {\n    cleaned = cleaned.split(\"<\")[0].trim();\n  }\n  \n  // Remove domain after pipe\n  if (cleaned.includes(\"|\")) {\n    cleaned = cleaned.split(\"|\")[0].trim();\n  }\n  \n  // Remove surrounding quotes\n  cleaned = cleaned.replace(/^[\\\"']|[\\\"']$/g, \"\");\n  \n  return cleaned || \"Unknown sender\";\n}\n\n/**\n * Formats action items into markdown list with proper link handling\n * @param {Array<string>} actions - Array of action strings\n * @returns {string} Formatted actions block or empty string\n */\nfunction formatActions(actions) {\n  if (!Array.isArray(actions) || actions.length === 0) {\n    return \"\";\n  }\n  \n  const URL_REGEX = /https?:\\/\\/\\S+/;\n  \n  const formattedActions = actions\n    .map((action) => {\n      // Handle \"Label: URL\" format\n      if (action.includes(\":\")) {\n        const parts = action.split(\":\");\n        const label = parts[0].trim();\n        const rest = parts.slice(1).join(\":\").trim();\n        const urlMatch = rest.match(URL_REGEX);\n        \n        if (urlMatch) {\n          return `- [${label}](${urlMatch[0]})`;\n        }\n      }\n      \n      // Handle direct URL in text\n      const urlMatch = action.match(URL_REGEX);\n      if (urlMatch) {\n        return `- [Open link](${urlMatch[0]})`;\n      }\n      \n      // Plain text action\n      return `- ${action}`;\n    })\n    .filter(Boolean);\n  \n  return formattedActions.length > 0\n    ? `\\n\\nActions:\\n${formattedActions.join(\"\\n\")}`\n    : \"\";\n}\n\n/**\n * Creates formatted email message\n * @param {Object} data - Combined email data\n * @returns {string} Formatted message string\n */\nfunction createEmailMessage(data) {\n  const { from, subject, category, receivedDate, summary, actions, gmailUrl } = data;\n  const actionsBlock = formatActions(actions);\n  const formattedDate = new Date(receivedDate).toLocaleString();\n  \n  // Escape user-generated content to prevent markdown parsing errors\n  const escapedFrom = escapeMarkdown(from);\n  const escapedSubject = escapeMarkdown(subject);\n  \n  return `[${escapedFrom}]: ${escapedSubject}\\nCategory: ${category}\\nReceived: ${formattedDate}\\n\\n${summary}${actionsBlock}\\n\\n[Open in Gmail](${gmailUrl})`;\n}\n\n// ---------- main ----------\nconst items = $input.all();\n\n// Early validation\nif (!items || !Array.isArray(items)) {\n  console.error(\"Invalid input: Expected array of items\");\n  return [\n    {\n      json: {\n        message: \"❌ Error: Invalid input data provided to email formatter\",\n        error: true,\n        isSummary: true,\n      },\n    },\n  ];\n}\n\nconst perEmailOutputs = [];\nconst aggregationStats = {\n  total: 0,\n  important: 0,\n  byCategory: new Map(),\n  importantList: [],\n  errors: 0,\n  parsingFailures: 0,\n};\n\nfor (const item of items) {\n  try {\n    // Handle both formats: items with or without .json wrapper\n    const data = item.json || item;\n    \n    console.log(\"Processing item:\", JSON.stringify(data).substring(0, 200));\n    \n    // Get LLM response text\n    const llmResponse = data.response;\n    \n    if (!llmResponse) {\n      console.warn(\"Skipping item with no LLM response. Available keys:\", Object.keys(data));\n      aggregationStats.errors++;\n      continue;\n    }\n    \n    // Parse LLM text response with urlMap for link rehydration\n    const parsedData = parseTextResponse(llmResponse, data.urlMap);\n    \n    if (!parsedData) {\n      console.error(`Failed to parse LLM response. Preview: ${llmResponse.substring(0, 100)}...`);\n      aggregationStats.parsingFailures++;\n      aggregationStats.errors++;\n      continue;\n    }\n    \n    // Get email metadata\n    const from = cleanFromName(data.fromName || \"Unknown sender\");\n    const subject = data.subject || \"No subject\";\n    const gmailUrl = data.gmailUrl || \"#\";\n    const receivedDate = data.internalDate || new Date().toISOString();\n    \n    // Combine LLM analysis with email metadata\n    const combinedData = {\n      isImportant: parsedData.isImportant,\n      category: parsedData.category || \"unknown\",\n      summary: parsedData.summary || \"No summary available\",\n      actions: parsedData.actions || [],\n      from,\n      subject,\n      gmailUrl,\n      receivedDate,\n    };\n    \n    // Update aggregation stats\n    aggregationStats.total++;\n    if (combinedData.isImportant) {\n      aggregationStats.important++;\n      aggregationStats.importantList.push({\n        subject: combinedData.subject,\n        from: combinedData.from,\n      });\n    }\n    \n    // Track categories\n    const currentCount = aggregationStats.byCategory.get(combinedData.category) || 0;\n    aggregationStats.byCategory.set(combinedData.category, currentCount + 1);\n    \n    // Create formatted message\n    const message = createEmailMessage(combinedData);\n    \n    const outputItem = {\n      json: {\n        message,\n        isImportant: combinedData.isImportant,\n        subject: combinedData.subject,\n        from: combinedData.from,\n        category: combinedData.category,\n        receivedDate: combinedData.receivedDate,\n        gmailUrl: combinedData.gmailUrl,\n        summary: combinedData.summary,\n        actions: combinedData.actions,\n        isSummary: false,\n      },\n    };\n    \n    perEmailOutputs.push(outputItem);\n  } catch (error) {\n    console.error(\"Error processing email item:\", error);\n    aggregationStats.errors++;\n  }\n}\n\n/**\n * Creates daily summary message from aggregation stats\n * @param {Object} stats - Aggregation statistics\n * @returns {Object} Summary message object\n */\nfunction createDailySummary(stats) {\n  const finishedAt = new Date().toLocaleString();\n  \n  // Handle no emails case\n  if (stats.total === 0) {\n    return {\n      message: \"📧 Daily Gmail scan complete — no new emails found.\",\n      totalEmails: 0,\n      importantEmails: 0,\n      byCategory: {},\n      errors: stats.errors,\n      parsingFailures: stats.parsingFailures,\n      finishedAt,\n      isSummary: true,\n    };\n  }\n  \n  // Build category breakdown\n  const categoryEntries = Array.from(stats.byCategory.entries())\n    .sort(([, a], [, b]) => b - a)\n    .map(([category, count]) => `• ${category}: ${count}`)\n    .join(\"\\n\");\n  \n  // Build top important emails list (with escaped markdown)\n  const topImportantLines = stats.importantList\n    .slice(0, 5)\n    .map((email) => `- **${escapeMarkdown(email.subject)}** — ${escapeMarkdown(email.from)}`)\n    .join(\"\\n\");\n  \n  // Construct summary message\n  let summaryMessage = `📊 **Daily Gmail Summary**\\n\\n📧 Total emails processed: ${stats.total}\\n🔴 Important emails: ${stats.important}`;\n  \n  if (stats.errors > 0) {\n    summaryMessage += `\\n⚠️ Processing errors: ${stats.errors}`;\n  }\n  \n  if (stats.parsingFailures > 0) {\n    summaryMessage += `\\n⚠️ Parsing failures: ${stats.parsingFailures}`;\n  }\n  \n  if (categoryEntries) {\n    summaryMessage += `\\n\\n**By category:**\\n${categoryEntries}`;\n  }\n  \n  if (topImportantLines) {\n    summaryMessage += `\\n\\n**Top important:**\\n${topImportantLines}`;\n  }\n  \n  summaryMessage += `\\n\\n✅ Individual summaries were sent above.\\n\\n_Scan completed at ${finishedAt}_`;\n  \n  return {\n    message: summaryMessage,\n    totalEmails: stats.total,\n    importantEmails: stats.important,\n    byCategory: Object.fromEntries(stats.byCategory),\n    errors: stats.errors,\n    parsingFailures: stats.parsingFailures,\n    finishedAt,\n    isSummary: true,\n  };\n}\n\n// Create and append daily summary\nconst summary = createDailySummary(aggregationStats);\nconst summaryItem = {\n  json: summary,\n};\nperEmailOutputs.push(summaryItem);\n\nreturn perEmailOutputs;"
+        "jsCode": "// Single Code node: per-email Telegram messages + final daily summary\n// Parses text format from LLM and combines with email metadata from previous nodes\n\n// ---------- helpers ----------\n\n/**\n * Escapes markdown special characters to prevent Telegram parsing errors\n * @param {string} text - Raw text that may contain markdown chars\n * @returns {string} Escaped text safe for Telegram markdown\n */\nfunction escapeMarkdown(text) {\n  if (!text || typeof text !== 'string') return '';\n\n  // Escape Telegram markdown special characters\n  // Order matters: backslash first, then others\n  return text\n    .replace(/\\\\/g, '\\\\\\\\')   // Backslash\n    .replace(/\\*/g, '\\\\*')    // Asterisk (bold)\n    .replace(/_/g, '\\\\_')     // Underscore (italic)\n    .replace(/\\[/g, '\\\\[')    // Opening bracket\n    .replace(/\\]/g, '\\\\]')    // Closing bracket\n    .replace(/\\(/g, '\\\\(')    // Opening parenthesis\n    .replace(/\\)/g, '\\\\)')    // Closing parenthesis\n    .replace(/~/g, '\\\\~')     // Tilde (strikethrough)\n    .replace(/`/g, '\\\\`')     // Backtick (code)\n    .replace(/>/g, '\\\\>')     // Greater than (quote)\n    .replace(/#/g, '\\\\#')     // Hash (heading)\n    .replace(/\\+/g, '\\\\+')    // Plus\n    .replace(/-/g, '\\\\-')     // Hyphen\n    .replace(/=/g, '\\\\=')     // Equals\n    .replace(/\\|/g, '\\\\|')    // Pipe\n    .replace(/\\{/g, '\\\\{')    // Opening brace\n    .replace(/\\}/g, '\\\\}')    // Closing brace\n    .replace(/\\./g, '\\\\.')    // Period\n    .replace(/!/g, '\\\\!');    // Exclamation\n}\n\n/**\n * Rehydrates link placeholders with actual URLs from urlMap\n * @param {string} text - Text containing [LINK_N] or LINK_N placeholders\n * @param {Array<string>} urlMap - Array of URLs extracted from email\n * @returns {string} Text with placeholders replaced by actual URLs\n */\nfunction rehydrateLinks(text, urlMap) {\n  if (!text || typeof text !== 'string') return text || '';\n  if (!urlMap || !Array.isArray(urlMap) || urlMap.length === 0) return text;\n  \n  // Track rehydration for logging\n  let replacedCount = 0;\n  const missingLinks = [];\n  \n  // Replace both [LINK_N] and LINK_N patterns\n  const rehydrated = text.replace(/\\[?LINK_(\\d+)\\]?/g, (match, index) => {\n    const arrayIndex = parseInt(index) - 1; // Convert 1-indexed to 0-indexed\n    \n    if (arrayIndex >= 0 && arrayIndex < urlMap.length && urlMap[arrayIndex]) {\n      replacedCount++;\n      return urlMap[arrayIndex];\n    } else {\n      // Link reference not found in urlMap\n      if (!missingLinks.includes(match)) {\n        missingLinks.push(match);\n      }\n      return match; // Keep original placeholder if not found\n    }\n  });\n  \n  // Log rehydration results\n  if (replacedCount > 0) {\n    console.log(`🔗 Rehydrated ${replacedCount} link reference(s)`);\n  }\n  if (missingLinks.length > 0) {\n    console.warn(`⚠️ Could not rehydrate: ${missingLinks.join(', ')} (urlMap has ${urlMap.length} entries)`);\n  }\n  \n  return rehydrated;\n}\n\n/**\n * Parses text response from LLM into structured data (updated for ### delimiter format)\n * @param {string} text - Raw text response from LLM\n * @param {Array<string>} urlMap - Array of URLs for rehydrating link placeholders\n * @returns {Object|null} Parsed data or null on failure\n */\nfunction parseTextResponse(text, urlMap) {\n  if (!text || typeof text !== 'string') return null;\n\n  // Remove any leading/trailing whitespace and potential preambles\n  let cleanText = text.trim();\n\n  // If response starts with a preamble, remove everything before first ###\n  const firstDelimiter = cleanText.indexOf('###');\n  if (firstDelimiter > 0) {\n    cleanText = cleanText.substring(firstDelimiter);\n    console.log(`Stripped preamble (${firstDelimiter} chars)`);\n  }\n\n  const result = {\n    isImportant: false,\n    category: 'other',\n    summary: '',\n    actions: []\n  };\n\n  // Parse fields using ### delimiters\n  const importantMatch = cleanText.match(/### Important[\\s\\n]+(Yes|No)/i);\n  if (importantMatch) {\n    result.isImportant = importantMatch[1].toLowerCase() === 'yes';\n  }\n\n  const categoryMatch = cleanText.match(/### Category[\\s\\n]+([^\\n#]+)/i);\n  if (categoryMatch) {\n    result.category = categoryMatch[1].trim().toLowerCase();\n  }\n\n  const summaryMatch = cleanText.match(/### Summary[\\s\\n]+([\\s\\S]+?)(?=\\n###|\\n---|$)/i);\n  if (summaryMatch) {\n    result.summary = summaryMatch[1].trim();\n  }\n\n  const actionsMatch = cleanText.match(/### Actions[\\s\\n]+([\\s\\S]+?)(?=\\n---|$)/i);\n  if (actionsMatch) {\n    const actionText = actionsMatch[1].trim();\n\n    if (actionText.toLowerCase() !== 'none') {\n      const lines = actionText.split('\\n');\n      for (let line of lines) {\n        line = line.trim();\n        if (line && !line.startsWith('#')) {\n          // Remove leading dashes or bullets\n          line = line.replace(/^[-*•]\\s*/, '');\n          if (line) {\n            const rehydrated = rehydrateLinks(line, urlMap);\n            result.actions.push(rehydrated);\n          }\n        }\n      }\n    }\n  }\n\n  // Rehydrate links in summary\n  if (result.summary) {\n    result.summary = rehydrateLinks(result.summary, urlMap);\n  }\n\n  return result;\n}\n\n/**\n * Cleans and normalizes sender name from email\n * @param {string} senderName - Raw sender name from email\n * @returns {string} Cleaned sender name\n */\nfunction cleanFromName(senderName) {\n  if (!senderName) return \"Unknown sender\";\n  \n  let cleaned = String(senderName).trim();\n  \n  // Remove email address in angle brackets\n  if (cleaned.includes(\"<\")) {\n    cleaned = cleaned.split(\"<\")[0].trim();\n  }\n  \n  // Remove domain after pipe\n  if (cleaned.includes(\"|\")) {\n    cleaned = cleaned.split(\"|\")[0].trim();\n  }\n  \n  // Remove surrounding quotes\n  cleaned = cleaned.replace(/^[\\\"']|[\\\"']$/g, \"\");\n  \n  return cleaned || \"Unknown sender\";\n}\n\n/**\n * Formats action items into markdown list with proper link handling\n * @param {Array<string>} actions - Array of action strings\n * @returns {string} Formatted actions block or empty string\n */\nfunction formatActions(actions) {\n  if (!Array.isArray(actions) || actions.length === 0) {\n    return \"\";\n  }\n  \n  const URL_REGEX = /https?:\\/\\/\\S+/;\n  \n  const formattedActions = actions\n    .map((action) => {\n      // Handle \"Label: URL\" format\n      if (action.includes(\":\")) {\n        const parts = action.split(\":\");\n        const label = parts[0].trim();\n        const rest = parts.slice(1).join(\":\").trim();\n        const urlMatch = rest.match(URL_REGEX);\n        \n        if (urlMatch) {\n          return `- [${label}](${urlMatch[0]})`;\n        }\n      }\n      \n      // Handle direct URL in text\n      const urlMatch = action.match(URL_REGEX);\n      if (urlMatch) {\n        return `- [Open link](${urlMatch[0]})`;\n      }\n      \n      // Plain text action\n      return `- ${action}`;\n    })\n    .filter(Boolean);\n  \n  return formattedActions.length > 0\n    ? `\\n\\nActions:\\n${formattedActions.join(\"\\n\")}`\n    : \"\";\n}\n\n/**\n * Creates formatted email message\n * @param {Object} data - Combined email data\n * @returns {string} Formatted message string\n */\nfunction createEmailMessage(data) {\n  const { from, subject, category, receivedDate, summary, actions, gmailUrl } = data;\n  const actionsBlock = formatActions(actions);\n  const formattedDate = new Date(receivedDate).toLocaleString();\n  \n  // Escape user-generated content to prevent markdown parsing errors\n  const escapedFrom = escapeMarkdown(from);\n  const escapedSubject = escapeMarkdown(subject);\n  \n  return `[${escapedFrom}]: ${escapedSubject}\\nCategory: ${category}\\nReceived: ${formattedDate}\\n\\n${summary}${actionsBlock}\\n\\n[Open in Gmail](${gmailUrl})`;\n}\n\n// ---------- main ----------\nconst items = $input.all();\n\n// Early validation\nif (!items || !Array.isArray(items)) {\n  console.error(\"Invalid input: Expected array of items\");\n  return [\n    {\n      json: {\n        message: \"❌ Error: Invalid input data provided to email formatter\",\n        error: true,\n        isSummary: true,\n      },\n    },\n  ];\n}\n\nconst perEmailOutputs = [];\nconst aggregationStats = {\n  total: 0,\n  important: 0,\n  byCategory: new Map(),\n  importantList: [],\n  errors: 0,\n  parsingFailures: 0,\n};\n\nfor (const item of items) {\n  try {\n    // Handle both formats: items with or without .json wrapper\n    const data = item.json || item;\n    \n    console.log(\"Processing item:\", JSON.stringify(data).substring(0, 200));\n    \n    // Get LLM response text\n    const llmResponse = data.response;\n    \n    if (!llmResponse) {\n      console.warn(\"Skipping item with no LLM response. Available keys:\", Object.keys(data));\n      aggregationStats.errors++;\n      continue;\n    }\n    \n    // Parse LLM text response with urlMap for link rehydration\n    const parsedData = parseTextResponse(llmResponse, data.urlMap);\n    \n    if (!parsedData) {\n      console.error(`Failed to parse LLM response. Preview: ${llmResponse.substring(0, 100)}...`);\n      aggregationStats.parsingFailures++;\n      aggregationStats.errors++;\n      continue;\n    }\n    \n    // Get email metadata\n    const from = cleanFromName(data.fromName || \"Unknown sender\");\n    const subject = data.subject || \"No subject\";\n    const gmailUrl = data.gmailUrl || \"#\";\n    const receivedDate = data.internalDate || new Date().toISOString();\n    \n    // Combine LLM analysis with email metadata\n    const combinedData = {\n      isImportant: parsedData.isImportant,\n      category: parsedData.category || \"unknown\",\n      summary: parsedData.summary || \"No summary available\",\n      actions: parsedData.actions || [],\n      from,\n      subject,\n      gmailUrl,\n      receivedDate,\n    };\n    \n    // Update aggregation stats\n    aggregationStats.total++;\n    if (combinedData.isImportant) {\n      aggregationStats.important++;\n      aggregationStats.importantList.push({\n        subject: combinedData.subject,\n        from: combinedData.from,\n      });\n    }\n    \n    // Track categories\n    const currentCount = aggregationStats.byCategory.get(combinedData.category) || 0;\n    aggregationStats.byCategory.set(combinedData.category, currentCount + 1);\n    \n    // Create formatted message\n    const message = createEmailMessage(combinedData);\n    \n    const outputItem = {\n      json: {\n        message,\n        isImportant: combinedData.isImportant,\n        subject: combinedData.subject,\n        from: combinedData.from,\n        category: combinedData.category,\n        receivedDate: combinedData.receivedDate,\n        gmailUrl: combinedData.gmailUrl,\n        summary: combinedData.summary,\n        actions: combinedData.actions,\n        isSummary: false,\n      },\n    };\n    \n    perEmailOutputs.push(outputItem);\n  } catch (error) {\n    console.error(\"Error processing email item:\", error);\n    aggregationStats.errors++;\n  }\n}\n\n/**\n * Creates daily summary message from aggregation stats\n * @param {Object} stats - Aggregation statistics\n * @returns {Object} Summary message object\n */\nfunction createDailySummary(stats) {\n  const finishedAt = new Date().toLocaleString();\n  \n  // Handle no emails case\n  if (stats.total === 0) {\n    return {\n      message: \"📧 Daily Gmail scan complete — no new emails found.\",\n      totalEmails: 0,\n      importantEmails: 0,\n      byCategory: {},\n      errors: stats.errors,\n      parsingFailures: stats.parsingFailures,\n      finishedAt,\n      isSummary: true,\n    };\n  }\n  \n  // Build category breakdown\n  const categoryEntries = Array.from(stats.byCategory.entries())\n    .sort(([, a], [, b]) => b - a)\n    .map(([category, count]) => `• ${category}: ${count}`)\n    .join(\"\\n\");\n  \n  // Build top important emails list (with escaped markdown)\n  const topImportantLines = stats.importantList\n    .slice(0, 5)\n    .map((email) => `- **${escapeMarkdown(email.subject)}** — ${escapeMarkdown(email.from)}`)\n    .join(\"\\n\");\n  \n  // Construct summary message\n  let summaryMessage = `📊 **Daily Gmail Summary**\\n\\n📧 Total emails processed: ${stats.total}\\n🔴 Important emails: ${stats.important}`;\n  \n  if (stats.errors > 0) {\n    summaryMessage += `\\n⚠️ Processing errors: ${stats.errors}`;\n  }\n  \n  if (stats.parsingFailures > 0) {\n    summaryMessage += `\\n⚠️ Parsing failures: ${stats.parsingFailures}`;\n  }\n  \n  if (categoryEntries) {\n    summaryMessage += `\\n\\n**By category:**\\n${categoryEntries}`;\n  }\n  \n  if (topImportantLines) {\n    summaryMessage += `\\n\\n**Top important:**\\n${topImportantLines}`;\n  }\n  \n  summaryMessage += `\\n\\n✅ Individual summaries were sent above.\\n\\n_Scan completed at ${finishedAt}_`;\n  \n  return {\n    message: summaryMessage,\n    totalEmails: stats.total,\n    importantEmails: stats.important,\n    byCategory: Object.fromEntries(stats.byCategory),\n    errors: stats.errors,\n    parsingFailures: stats.parsingFailures,\n    finishedAt,\n    isSummary: true,\n  };\n}\n\n// Create and append daily summary\nconst summary = createDailySummary(aggregationStats);\nconst summaryItem = {\n  json: summary,\n};\nperEmailOutputs.push(summaryItem);\n\nreturn perEmailOutputs;"
       },
       "id": "0e04fde7-2d33-48c9-b778-b486d931032b",
       "name": "Format for Telegram",
       "type": "n8n-nodes-base.code",
-      "position": [
-        0,
-        0
-      ],
+      "position": [0, 0],
       "typeVersion": 2
     },
     {
@@ -210,10 +189,7 @@
       "id": "177ef603-2966-4d37-bcb3-478a814ad1bd",
       "name": "Notify Processing Started",
       "type": "n8n-nodes-base.telegram",
-      "position": [
-        368,
-        192
-      ],
+      "position": [368, 192],
       "webhookId": "notify-start-webhook",
       "typeVersion": 1.2,
       "credentials": {
@@ -272,11 +248,7 @@
             },
             {
               "name": "stop",
-              "value": [
-                "---",
-                "\n---\n",
-                "---\n"
-              ]
+              "value": ["---", "\n---\n", "---\n"]
             }
           ]
         },
@@ -287,10 +259,7 @@
       "id": "55c45e71-bf2f-44e5-9167-dbb302b396ce",
       "name": "Summarise Email with LLM",
       "type": "n8n-nodes-base.httpRequest",
-      "position": [
-        160,
-        400
-      ],
+      "position": [160, 400],
       "typeVersion": 4.2
     },
     {
@@ -301,10 +270,7 @@
       "id": "685d0f91-189f-4b15-8dc9-511c8b907a74",
       "name": "Calculate Metrics",
       "type": "n8n-nodes-base.code",
-      "position": [
-        560,
-        320
-      ],
+      "position": [560, 320],
       "typeVersion": 2
     },
     {
@@ -319,10 +285,7 @@
       "id": "4834b51a-08da-4590-8b8e-42fecbbffb8c",
       "name": "Notify Processing Complete",
       "type": "n8n-nodes-base.telegram",
-      "position": [
-        736,
-        320
-      ],
+      "position": [736, 320],
       "webhookId": "notify-complete-webhook",
       "typeVersion": 1.2,
       "credentials": {
@@ -348,10 +311,7 @@
       },
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
-      "position": [
-        -192,
-        240
-      ],
+      "position": [-192, 240],
       "id": "c71b3416-23f8-4c2a-bf78-a08647330f41",
       "name": "Set model",
       "alwaysOutputData": false
@@ -379,10 +339,7 @@
       "id": "c2bc3f22-92a0-4a7d-a33a-0e08bb0b3394",
       "name": "Set Start Timestamp",
       "type": "n8n-nodes-base.set",
-      "position": [
-        -192,
-        384
-      ],
+      "position": [-192, 384],
       "typeVersion": 3.4
     },
     {
@@ -396,10 +353,7 @@
       "id": "d53d905f-b2b9-47a3-bf6e-5fb7f0ccc43f",
       "name": "Notify No Emails",
       "type": "n8n-nodes-base.telegram",
-      "position": [
-        -784,
-        240
-      ],
+      "position": [-784, 240],
       "webhookId": "ea8088a1-7a12-4dc2-b691-9e3d3d37cab1",
       "typeVersion": 1.2,
       "credentials": {
@@ -420,10 +374,7 @@
       "id": "c8986756-0ded-4577-aecd-267258ef6762",
       "name": "Notify Summary",
       "type": "n8n-nodes-base.telegram",
-      "position": [
-        368,
-        0
-      ],
+      "position": [368, 0],
       "webhookId": "bb5d0404-e164-49b9-8f65-2df8d5aa2e10",
       "typeVersion": 1.2,
       "credentials": {
@@ -441,10 +392,7 @@
       },
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3.2,
-      "position": [
-        368,
-        400
-      ],
+      "position": [368, 400],
       "id": "aee689bc-98ff-4e1d-a2fa-23bf8118f38b",
       "name": "Merge Model Output"
     },
@@ -457,10 +405,7 @@
       },
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3.2,
-      "position": [
-        0,
-        176
-      ],
+      "position": [0, 176],
       "id": "e7db912c-26cf-4224-9bea-2bc98cafaa83",
       "name": "Merge Model Input"
     },
@@ -471,10 +416,7 @@
       },
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3.2,
-      "position": [
-        912,
-        480
-      ],
+      "position": [912, 480],
       "id": "997690a7-b071-404d-ace0-c770ddabfe06",
       "name": "Use Model Output"
     }
