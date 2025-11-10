@@ -355,11 +355,14 @@ else:
 
     # CPU usage query
     local cpu_data
-    cpu_data=$(curl -s "http://localhost:9090/api/v1/query_range?query=100%20-%20(avg%20by(instance)%20(rate(node_cpu_seconds_total{mode=\"idle\"}[5m]))%20*%20100)&start=${start_unix}&end=${end_unix}&step=60")
+    cpu_data=$(curl -g -s "http://localhost:9090/api/v1/query_range?query=100%20-%20(avg%20by(instance)%20(rate(node_cpu_seconds_total{mode=\"idle\"}[5m]))%20*%20100)&start=${start_unix}&end=${end_unix}&step=60")
+    local curl_exit=$?
 
     echo "⚙️  CPU UTILIZATION"
     echo "----------------------------------------------------------------------"
-    if echo "$cpu_data" | grep -q '"status":"success"'; then
+    if [[ $curl_exit -ne 0 ]]; then
+        echo "  ⚠️  Failed to query CPU data (curl error code: $curl_exit)"
+    elif echo "$cpu_data" | grep -q '"status":"success"'; then
         echo "$cpu_data" | python3 -c "
 import json, sys
 data = json.load(sys.stdin)
@@ -373,9 +376,9 @@ if data['status'] == 'success' and data['data']['result']:
         print(f'  Average:    {sum(cpu_usage)/len(cpu_usage):.1f}%')
 else:
     print('  No data available')
-" 2>/dev/null || echo "  Error parsing CPU data"
+" 2>/dev/null || echo "  ⚠️  Error parsing CPU data"
     else
-        echo "  No CPU data available"
+        echo "  ⚠️  No CPU data available (Prometheus returned non-success status)"
     fi
 
     echo ""
