@@ -419,7 +419,7 @@ parse_execution_data() {
     fi
 
     # Check if Python script exists
-    local parser_script="${SCRIPT_DIR}/parse-execution-data.py"
+    local parser_script="${LIB_DIR}/parse-execution-data.py"
     if [[ ! -f "$parser_script" ]]; then
         log_error "Parser script not found: $parser_script"
         return 1
@@ -464,7 +464,7 @@ analyze_llm_responses() {
     fi
 
     # Check if extraction script exists
-    local extractor_script="${SCRIPT_DIR}/extract-llm-responses.py"
+    local extractor_script="${LIB_DIR}/extract-llm-responses.py"
     if [[ ! -f "$extractor_script" ]]; then
         log_error "LLM extractor script not found: $extractor_script"
         return 1
