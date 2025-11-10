@@ -1,0 +1,706 @@
+{
+  "name": "Gmail to Telegram 1B",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 2
+            }
+          ]
+        }
+      },
+      "id": "7f49dcc1-2ab4-46a6-a289-772b222c394c",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "position": [
+        -1376,
+        64
+      ],
+      "typeVersion": 1.2
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "limit": 20,
+        "simple": false,
+        "filters": {
+          "readStatus": "unread",
+          "receivedAfter": "={{ $today.minus(2, 'day').startOf('day').toISO() }}"
+        },
+        "options": {}
+      },
+      "id": "62a1bd26-1b19-4aa0-b870-b5803ea47fa3",
+      "name": "Get Unread Emails",
+      "type": "n8n-nodes-base.gmail",
+      "position": [
+        -1184,
+        64
+      ],
+      "webhookId": "de438789-71b6-421a-b4ec-c8ff234aa80f",
+      "typeVersion": 2,
+      "alwaysOutputData": true,
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "52sKMHofP7P9AGpR",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 1,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "condition-has-emails",
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              },
+              "leftValue": "={{ $input.all().length }}",
+              "rightValue": 0
+            },
+            {
+              "id": "090360f7-5b35-4376-b041-18fb1eb89a46",
+              "operator": {
+                "type": "object",
+                "operation": "notEmpty",
+                "singleValue": true
+              },
+              "leftValue": "={{ $input.first() }}",
+              "rightValue": ""
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "641c0d67-b58f-4a3e-a160-588327243e7b",
+      "name": "Any Emails?",
+      "type": "n8n-nodes-base.if",
+      "position": [
+        -992,
+        64
+      ],
+      "typeVersion": 2,
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "e0f5d3a2-366b-44db-9dd3-033d6b9f7a80",
+              "name": "id",
+              "type": "string",
+              "value": "={{ $json.id }}"
+            },
+            {
+              "id": "e22e7ea8-4364-426d-a457-afce4bfa6625",
+              "name": "to",
+              "type": "string",
+              "value": "={{ $json.to.text }}"
+            },
+            {
+              "id": "0c71a3c0-6aff-4336-b82f-4c21fc514cd9",
+              "name": "fromAddress",
+              "type": "string",
+              "value": "={{ $json.from.value[0].address }}"
+            },
+            {
+              "id": "42822dc7-4c9b-433c-8965-d326036dad98",
+              "name": "fromName",
+              "type": "string",
+              "value": "={{ $json.from.value[0].name }}"
+            },
+            {
+              "id": "b6a55194-7dcb-4f0a-a048-b09eef1ce6e6",
+              "name": "subject",
+              "type": "string",
+              "value": "={{ $json.subject }}"
+            },
+            {
+              "id": "ea1c5a43-f3fa-4af5-ba9d-ecd3946ba6a8",
+              "name": "text",
+              "type": "string",
+              "value": "={{ $json.text }}"
+            },
+            {
+              "id": "94a8bb73-3ac0-4721-ba0a-f0d585810bd3",
+              "name": "gmailUrl",
+              "type": "string",
+              "value": "=https://mail.google.com/mail/u/0/#inbox/{{ $json.threadId }}"
+            },
+            {
+              "id": "d6341c88-1aca-4007-995d-cc34e7019247",
+              "name": "internalDate",
+              "type": "string",
+              "value": "={{ $json.date }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "6c7b6749-98de-4812-93b7-9c1a192316e8",
+      "name": "Map Email Fields",
+      "type": "n8n-nodes-base.set",
+      "position": [
+        -784,
+        64
+      ],
+      "typeVersion": 3.4
+    },
+    {
+      "parameters": {
+        "jsCode": "// Email Sanitization Node - Cleans raw email HTML and text for LLM processing\n// Based on: docs/email-sanitization-strategy.md\n\nconst items = $input.all();\n\n// ========== INPUT VALIDATION ==========\n\n// Validate and normalize input data to prevent null pointer errors\nconst validatedItems = items.map((item, index) => {\n  const email = item.json || item;\n  \n  // Ensure required fields exist with fallback values\n  if (!email.fromAddress) {\n    console.warn(`⚠️ Email ${index} missing fromAddress, using default`);\n    email.fromAddress = 'unknown@unknown.com';\n  }\n  \n  if (!email.subject) {\n    console.warn(`⚠️ Email ${index} missing subject, using default`);\n    email.subject = '(No Subject)';\n  }\n  \n  if (email.text === null || email.text === undefined) {\n    console.warn(`⚠️ Email ${index} (${email.id}) has null/undefined text field, setting to empty string`);\n    email.text = '';\n  }\n  \n  return { json: email };\n});\n\n// ========== HELPER FUNCTIONS ==========\n\n/**\n * Cleans HTML tags, entities, and formatting from email text\n */\nfunction cleanHTML(rawHtml) {\n  let text = rawHtml;\n\n  // 1. Remove script and style tags entirely\n  text = text.replace(/<script[^>]*>[\\s\\S]*?<\\/script>/gi, '');\n  text = text.replace(/<style[^>]*>[\\s\\S]*?<\\/style>/gi, '');\n\n  // 2. Remove tracking pixels and analytics\n  text = text.replace(/<img[^>]*tracking[^>]*>/gi, '');\n  text = text.replace(/<img[^>]*analytics[^>]*>/gi, '');\n  text = text.replace(/<img[^>]*width=[\"']?1[\"']?[^>]*height=[\"']?1[\"']?[^>]*>/gi, '');\n\n  // 3. Convert common HTML entities\n  const entities = {\n    '&nbsp;': ' ',\n    '&amp;': '&',\n    '&lt;': '<',\n    '&gt;': '>',\n    '&quot;': '\"',\n    '&#39;': \"'\",\n    '&mdash;': '—',\n    '&ndash;': '–',\n    '&hellip;': '...'\n  };\n\n  Object.keys(entities).forEach(entity => {\n    text = text.replace(new RegExp(entity, 'g'), entities[entity]);\n  });\n\n  // 4. Remove all HTML tags (preserve content)\n  text = text.replace(/<[^>]*>/g, ' ');\n\n  // 5. Decode remaining numeric entities\n  text = text.replace(/&#(\\d+);/g, (match, dec) => String.fromCharCode(dec));\n  text = text.replace(/&#x([0-9a-f]+);/gi, (match, hex) => String.fromCharCode(parseInt(hex, 16)));\n\n  // 6. Normalize whitespace\n  text = text.replace(/[ \\t]+/g, ' ');           // Multiple spaces to single\n  text = text.replace(/\\n\\s*\\n\\s*\\n/g, '\\n\\n');  // Multiple newlines to max 2\n  text = text.trim();\n\n  return text;\n}\n\n/**\n * Detects email language using character and word patterns\n */\nfunction detectLanguage(text, sender, subject) {\n  const combined = ((text || '') + ' ' + (subject || '') + ' ' + (sender || '')).toLowerCase();\n\n  const languagePatterns = {\n    polish: {\n      chars: /[ąćęłńóśźż]/g,\n      words: ['jest', 'wiadomość', 'promocja', 'rabatu', 'sklep', 'dostaw'],\n      weight: 0\n    },\n    german: {\n      chars: /[äöüß]/g,\n      words: ['das', 'ist', 'und', 'der', 'die', 'mit', 'für'],\n      weight: 0\n    },\n    french: {\n      chars: /[àâæçéèêëïîôùûü]/g,\n      words: ['est', 'pour', 'avec', 'dans', 'votre', 'merci'],\n      weight: 0\n    }\n  };\n\n  // Count special characters and words\n  Object.keys(languagePatterns).forEach(lang => {\n    const charMatches = combined.match(languagePatterns[lang].chars) || [];\n    languagePatterns[lang].weight += charMatches.length * 2;\n\n    languagePatterns[lang].words.forEach(word => {\n      if (combined.includes(word)) {\n        languagePatterns[lang].weight += 5;\n      }\n    });\n  });\n\n  // Find highest weight\n  let detectedLang = 'english';\n  let maxWeight = 20; // Threshold for non-English\n\n  Object.keys(languagePatterns).forEach(lang => {\n    if (languagePatterns[lang].weight > maxWeight) {\n      detectedLang = lang;\n      maxWeight = languagePatterns[lang].weight;\n    }\n  });\n\n  return detectedLang;\n}\n\n/**\n * Detects if email is promotional/marketing based on patterns\n */\nfunction isPromotional(email) {\n  const sender = (email.fromAddress || '').toLowerCase();\n  const subject = (email.subject || '').toLowerCase();\n  const text = (email.text || '').toLowerCase();\n\n  // Sender domain patterns\n  const promoSenders = ['udemy.com', 'zalando', 'newsletter', 'marketing', 'promo', 'noreply'];\n  const hasPromoSender = promoSenders.some(pattern => sender.includes(pattern));\n\n  // Subject patterns\n  const promoKeywords = ['sale', 'discount', '% off', 'new arrivals', 'special offer', 'limited time'];\n  const hasPromoSubject = promoKeywords.some(kw => subject.includes(kw));\n\n  // Content patterns (product listing indicators)\n  const productPatterns = [\n    /\\$\\d+\\.\\d{2}/g,        // Prices: $19.99\n    /€\\d+[,\\.]\\d{2}/g,      // Euro prices: €19,99\n    /zł\\s*\\d+/g,            // Polish złoty: zł 99\n    /buy now/gi,            // CTA\n    /shop now/gi,           // CTA\n    /\\d+%\\s*off/gi,         // Discount mentions\n  ];\n\n  let productMentions = 0;\n  productPatterns.forEach(pattern => {\n    const matches = text.match(pattern) || [];\n    productMentions += matches.length;\n  });\n\n  // If 5+ product mentions, likely promotional\n  const hasHighProductDensity = productMentions >= 5;\n\n  return hasPromoSender || hasPromoSubject || hasHighProductDensity;\n}\n\n/**\n * Extracts product blocks from promotional emails\n */\nfunction extractProductBlocks(text) {\n  const lines = text.split('\\n');\n  const products = [];\n\n  let currentBlock = '';\n  for (const line of lines) {\n    // Detect product line (has price or CTA)\n    if (/\\$\\d+|€\\d+|buy|shop|view/gi.test(line)) {\n      if (currentBlock.length > 10) {\n        products.push(currentBlock.trim());\n      }\n      currentBlock = line;\n    } else {\n      currentBlock += ' ' + line;\n    }\n  }\n\n  if (currentBlock.length > 10) {\n    products.push(currentBlock.trim());\n  }\n\n  return products.slice(0, 3); // Max 3 products\n}\n\n/**\n * Simplifies promotional emails to essential information\n */\nfunction sanitizePromotionalEmail(text, subject, sender) {\n  const productBlocks = extractProductBlocks(text);\n  \n  let simplified = `Newsletter from ${sender}\\nSubject: ${subject}\\n\\nType: Promotional content\\n\\n`;\n  \n  if (productBlocks.length > 0) {\n    simplified += 'Key items mentioned:\\n';\n    simplified += productBlocks.slice(0, 3).join('\\n') + '\\n';\n  }\n  \n  if (productBlocks.length > 3) {\n    simplified += '\\n[Additional products truncated]\\n';\n  }\n  \n  return simplified;\n}\n\n/**\n * Extracts URLs and replaces them with placeholders\n */\nfunction extractAndReplaceURLs(text) {\n  const urls = [];\n  const urlPattern = /https?:\\/\\/[^\\s<>\"]+/g;\n\n  // Extract all URLs\n  let match;\n  while ((match = urlPattern.exec(text)) !== null) {\n    urls.push(match[0]);\n  }\n\n  // Remove duplicates\n  const uniqueUrls = [...new Set(urls)];\n\n  // Replace URLs with short placeholders\n  let cleanedText = text;\n  uniqueUrls.forEach((url, index) => {\n    const placeholder = `[LINK_${index + 1}]`;\n    cleanedText = cleanedText.replace(new RegExp(url.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&'), 'g'), placeholder);\n  });\n\n  return {\n    cleanedText,\n    urls: uniqueUrls\n  };\n}\n\n/**\n * Removes common email boilerplate (footers, unsubscribe, etc.)\n */\nfunction removeBoilerplate(text) {\n  const boilerplatePatterns = [\n    // Unsubscribe sections\n    /unsubscribe.*?(\\n\\n|\\n|$)/gi,\n    /click here to (stop receiving|opt out|manage).*?(\\n\\n|\\n|$)/gi,\n    /you (are receiving|received) this.*?(\\n\\n|\\n|$)/gi,\n\n    // Privacy/legal\n    /privacy policy.*?(\\n\\n|\\n|$)/gi,\n    /terms (and|&) conditions.*?(\\n\\n|\\n|$)/gi,\n    /this email (is|was) sent.*?(\\n\\n|\\n|$)/gi,\n\n    // View in browser\n    /(view|open) (this|email) in.*?browser.*?(\\n\\n|\\n|$)/gi,\n    /can't see.*?images.*?(\\n\\n|\\n|$)/gi,\n\n    // Social media footer\n    /follow us on.*?(\\n\\n|\\n|$)/gi,\n\n    // Copyright\n    /©.*?\\d{4}.*?(\\n\\n|\\n|$)/gi,\n    /copyright.*?\\d{4}.*?(\\n\\n|\\n|$)/gi,\n  ];\n\n  let cleaned = text;\n  boilerplatePatterns.forEach(pattern => {\n    cleaned = cleaned.replace(pattern, '\\n');\n  });\n\n  // Remove trailing repetitive content (last 15% if footer-like)\n  const lines = cleaned.split('\\n');\n  const threshold = Math.floor(lines.length * 0.85);\n  const lastSection = lines.slice(threshold).join('\\n').toLowerCase();\n\n  if (/unsubscribe|privacy|copyright|address|follow us/.test(lastSection)) {\n    cleaned = lines.slice(0, threshold).join('\\n');\n  }\n\n  return cleaned.trim();\n}\n\n/**\n * Adds language context instruction for non-English emails\n */\nfunction addLanguageContext(text, detectedLanguage) {\n  if (detectedLanguage === 'english') {\n    return text;\n  }\n\n  const languageHints = {\n    polish: 'Polish',\n    german: 'German',\n    french: 'French'\n  };\n\n  const langName = languageHints[detectedLanguage] || detectedLanguage;\n\n  return `[LANGUAGE: This email is written in ${langName}. Extract the information and provide ALL output fields in English, regardless of the email's language.]\\n\\n${text}`;\n}\n\n/**\n * Truncates email text to maximum character length\n */\nfunction truncateEmail(text, maxChars = 10000) {\n  if (text.length <= maxChars) {\n    return text;\n  }\n\n  // Try to truncate at sentence boundary\n  const truncated = text.substring(0, maxChars);\n\n  // Find last sentence ending\n  const lastPeriod = truncated.lastIndexOf('.');\n  const lastQuestion = truncated.lastIndexOf('?');\n  const lastExclaim = truncated.lastIndexOf('!');\n\n  const lastSentenceEnd = Math.max(lastPeriod, lastQuestion, lastExclaim);\n\n  if (lastSentenceEnd > maxChars * 0.8) {\n    // Good sentence boundary found (within last 20%)\n    return truncated.substring(0, lastSentenceEnd + 1) + '\\n\\n[Email content truncated due to length]';\n  } else {\n    // No good boundary, hard truncate\n    return truncated + '...\\n\\n[Email content truncated due to length]';\n  }\n}\n\n// ========== MAIN SANITIZATION FUNCTION ==========\n\nfunction sanitizeEmail(email) {\n  // Extract metadata (already clean from Gmail API)\n  const metadata = {\n    id: email.id,\n    to: email.to,\n    fromAddress: email.fromAddress,\n    fromName: email.fromName,\n    subject: email.subject,\n    gmailUrl: email.gmailUrl,\n    internalDate: email.internalDate\n  };\n\n  // Get raw text with null safety\n  let text = email.text || '';\n  const originalLength = text.length;\n\n  // Early return for empty text (HTML-only or empty emails)\n  if (text.length === 0) {\n    console.warn(`⚠️ Email ${email.id} has no text content - returning placeholder`);\n    return {\n      json: {\n        ...metadata,\n        text: '[Email has no text content - HTML only or empty]',\n        urlMap: [],\n        language: 'english',\n        isPromotional: false,\n        sanitizationStats: {\n          originalLength: 0,\n          cleanedLength: 0,\n          reductionPercent: 0,\n          urlsExtracted: 0\n        }\n      }\n    };\n  }\n\n  // Step 1: Clean HTML\n  text = cleanHTML(text);\n\n  // Step 2: Detect language\n  const language = detectLanguage(text, email.fromAddress, email.subject);\n\n  // Step 3: Detect if promotional\n  const isPromo = isPromotional(email);\n\n  // Step 4: Apply promotional simplification if needed\n  if (isPromo) {\n    text = sanitizePromotionalEmail(text, email.subject, email.fromName);\n  }\n\n  // Step 5: Extract and replace URLs\n  const { cleanedText, urls } = extractAndReplaceURLs(text);\n  text = cleanedText;\n\n  // Step 6: Remove boilerplate\n  text = removeBoilerplate(text);\n\n  // Step 7: Normalize whitespace (final cleanup)\n  text = text.replace(/\\s+/g, ' ').trim();\n  text = text.replace(/\\n\\s*\\n\\s*\\n+/g, '\\n\\n'); // Max 2 consecutive newlines\n\n  // Step 8: Add language context if non-English\n  if (language !== 'english') {\n    text = addLanguageContext(text, language);\n  }\n\n  // Step 9: Truncate if too long\n  text = truncateEmail(text, 10000);\n\n  // OPTIMIZATION: Additional truncation for 1B models (reduces processing time variance)\n  // Investigation 287 showed HTML-heavy emails take 10-40x longer with small models\n  const MAX_CHARS_1B = 2000;  // Enough for summary, not too much to slow down\n  \n  if (text.length > MAX_CHARS_1B) {\n    // Keep first 2000 chars (typically contains all important info)\n    let truncated = text.substring(0, MAX_CHARS_1B);\n    \n    // Try to cut at sentence boundary\n    const lastPeriod = truncated.lastIndexOf('.');\n    const lastQuestion = truncated.lastIndexOf('?');\n    const lastExclaim = truncated.lastIndexOf('!');\n    const lastSentence = Math.max(lastPeriod, lastQuestion, lastExclaim);\n    \n    if (lastSentence > MAX_CHARS_1B * 0.8) {\n      truncated = truncated.substring(0, lastSentence + 1);\n    }\n    \n    text = truncated + '\\n\\n[Email content truncated for 1B model optimization - showing first 2000 characters]';\n    \n    console.log(`✂️ 1B optimization: Truncated email from ${cleanedLength} to ${text.length} chars (${Math.round((text.length/cleanedLength)*100)}%)`);\n  }\n\n  // Calculate statistics\n  const cleanedLength = text.length;\n  const reductionPercent = originalLength > 0 ? Math.round((1 - cleanedLength / originalLength) * 100) : 0;\n\n  return {\n    json: {\n      ...metadata,\n      text: text,\n      urlMap: urls,\n      language: language,\n      isPromotional: isPromo,\n      sanitizationStats: {\n        originalLength,\n        cleanedLength,\n        reductionPercent,\n        urlsExtracted: urls.length\n      }\n    }\n  };\n}\n\n// ========== PROCESS ALL EMAILS ==========\n\n// Process with error handling to prevent one bad email from breaking the batch\nconst output = validatedItems.map((item, index) => {\n  try {\n    return sanitizeEmail(item.json || item);\n  } catch (error) {\n    console.error(`❌ Failed to sanitize email ${index} (${item.json?.id}): ${error.message}`);\n    \n    // Return minimal valid output for failed email\n    const email = item.json || item;\n    return {\n      json: {\n        id: email.id || 'unknown',\n        to: email.to || '',\n        fromAddress: email.fromAddress || 'unknown',\n        fromName: email.fromName || 'Unknown',\n        subject: email.subject || '(Error)',\n        text: `[ERROR: Failed to process email - ${error.message}]`,\n        gmailUrl: email.gmailUrl || '',\n        internalDate: email.internalDate || '',\n        urlMap: [],\n        language: 'english',\n        isPromotional: false,\n        sanitizationStats: {\n          originalLength: 0,\n          cleanedLength: 0,\n          reductionPercent: 0,\n          urlsExtracted: 0\n        }\n      }\n    };\n  }\n});\n\n// Log summary statistics\nconst totalReduction = output.reduce((sum, item) => sum + item.json.sanitizationStats.reductionPercent, 0);\nconst avgReduction = output.length > 0 ? Math.round(totalReduction / output.length) : 0;\nconst totalUrls = output.reduce((sum, item) => sum + item.json.sanitizationStats.urlsExtracted, 0);\nconst nonEnglishCount = output.filter(item => item.json.language !== 'english').length;\nconst promotionalCount = output.filter(item => item.json.isPromotional).length;\n\nconsole.log(`✅ Sanitized ${output.length} emails`);\nconsole.log(`📊 Avg token reduction: ${avgReduction}%`);\nconsole.log(`🔗 URLs extracted: ${totalUrls}`);\nconsole.log(`🌍 Non-English emails: ${nonEnglishCount}`);\nconsole.log(`📧 Promotional emails: ${promotionalCount}`);\n\nreturn output;"
+      },
+      "id": "62dda468-9d28-41df-9331-36c069095678",
+      "name": "Clean Email Input",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        -592,
+        64
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "options": {
+          "reset": false
+        }
+      },
+      "id": "bfcc081f-98c9-408b-92c5-01a93939e4f2",
+      "name": "Loop Over Emails",
+      "type": "n8n-nodes-base.splitInBatches",
+      "position": [
+        -384,
+        64
+      ],
+      "typeVersion": 3
+    },
+    {
+      "parameters": {
+        "jsCode": "// Single Code node: per-email Telegram messages + final daily summary\n// Parses text format from LLM and combines with email metadata from previous nodes\n\n// ---------- helpers ----------\n\n/**\n * Escapes markdown special characters to prevent Telegram parsing errors\n * @param {string} text - Raw text that may contain markdown chars\n * @returns {string} Escaped text safe for Telegram markdown\n */\nfunction escapeMarkdown(text) {\n  if (!text || typeof text !== 'string') return '';\n\n  // Escape Telegram markdown special characters\n  // Order matters: backslash first, then others\n  return text\n    .replace(/\\\\/g, '\\\\\\\\')   // Backslash\n    .replace(/\\*/g, '\\\\*')    // Asterisk (bold)\n    .replace(/_/g, '\\\\_')     // Underscore (italic)\n    .replace(/\\[/g, '\\\\[')    // Opening bracket\n    .replace(/\\]/g, '\\\\]')    // Closing bracket\n    .replace(/\\(/g, '\\\\(')    // Opening parenthesis\n    .replace(/\\)/g, '\\\\)')    // Closing parenthesis\n    .replace(/~/g, '\\\\~')     // Tilde (strikethrough)\n    .replace(/`/g, '\\\\`')     // Backtick (code)\n    .replace(/>/g, '\\\\>')     // Greater than (quote)\n    .replace(/#/g, '\\\\#')     // Hash (heading)\n    .replace(/\\+/g, '\\\\+')    // Plus\n    .replace(/-/g, '\\\\-')     // Hyphen\n    .replace(/=/g, '\\\\=')     // Equals\n    .replace(/\\|/g, '\\\\|')    // Pipe\n    .replace(/\\{/g, '\\\\{')    // Opening brace\n    .replace(/\\}/g, '\\\\}')    // Closing brace\n    .replace(/\\./g, '\\\\.')    // Period\n    .replace(/!/g, '\\\\!');    // Exclamation\n}\n\n/**\n * Rehydrates link placeholders with actual URLs from urlMap\n * @param {string} text - Text containing [LINK_N] or LINK_N placeholders\n * @param {Array<string>} urlMap - Array of URLs extracted from email\n * @returns {string} Text with placeholders replaced by actual URLs\n */\nfunction rehydrateLinks(text, urlMap) {\n  if (!text || typeof text !== 'string') return text || '';\n  if (!urlMap || !Array.isArray(urlMap) || urlMap.length === 0) return text;\n  \n  // Track rehydration for logging\n  let replacedCount = 0;\n  const missingLinks = [];\n  \n  // Replace both [LINK_N] and LINK_N patterns\n  const rehydrated = text.replace(/\\[?LINK_(\\d+)\\]?/g, (match, index) => {\n    const arrayIndex = parseInt(index) - 1; // Convert 1-indexed to 0-indexed\n    \n    if (arrayIndex >= 0 && arrayIndex < urlMap.length && urlMap[arrayIndex]) {\n      replacedCount++;\n      return urlMap[arrayIndex];\n    } else {\n      // Link reference not found in urlMap\n      if (!missingLinks.includes(match)) {\n        missingLinks.push(match);\n      }\n      return match; // Keep original placeholder if not found\n    }\n  });\n  \n  // Log rehydration results\n  if (replacedCount > 0) {\n    console.log(`🔗 Rehydrated ${replacedCount} link reference(s)`);\n  }\n  if (missingLinks.length > 0) {\n    console.warn(`⚠️ Could not rehydrate: ${missingLinks.join(', ')} (urlMap has ${urlMap.length} entries)`);\n  }\n  \n  return rehydrated;\n}\n\n/**\n * Parses text response from LLM into structured data (updated for ### delimiter format)\n * @param {string} text - Raw text response from LLM\n * @param {Array<string>} urlMap - Array of URLs for rehydrating link placeholders\n * @returns {Object|null} Parsed data or null on failure\n */\nfunction parseTextResponse(text, urlMap) {\n  if (!text || typeof text !== 'string') return null;\n\n  // Remove any leading/trailing whitespace and potential preambles\n  let cleanText = text.trim();\n\n  // If response starts with a preamble, remove everything before first ###\n  const firstDelimiter = cleanText.indexOf('###');\n  if (firstDelimiter > 0) {\n    cleanText = cleanText.substring(firstDelimiter);\n    console.log(`Stripped preamble (${firstDelimiter} chars)`);\n  }\n\n  const result = {\n    isImportant: false,\n    category: 'other',\n    summary: '',\n    actions: []\n  };\n\n  // Parse fields using ### delimiters\n  const importantMatch = cleanText.match(/### Important[\\s\\n]+(Yes|No)/i);\n  if (importantMatch) {\n    result.isImportant = importantMatch[1].toLowerCase() === 'yes';\n  }\n\n  const categoryMatch = cleanText.match(/### Category[\\s\\n]+([^\\n#]+)/i);\n  if (categoryMatch) {\n    result.category = categoryMatch[1].trim().toLowerCase();\n  }\n\n  const summaryMatch = cleanText.match(/### Summary[\\s\\n]+([\\s\\S]+?)(?=\\n###|\\n---|$)/i);\n  if (summaryMatch) {\n    result.summary = summaryMatch[1].trim();\n  }\n\n  const actionsMatch = cleanText.match(/### Actions[\\s\\n]+([\\s\\S]+?)(?=\\n---|$)/i);\n  if (actionsMatch) {\n    const actionText = actionsMatch[1].trim();\n\n    if (actionText.toLowerCase() !== 'none') {\n      const lines = actionText.split('\\n');\n      for (let line of lines) {\n        line = line.trim();\n        if (line && !line.startsWith('#')) {\n          // Remove leading dashes or bullets\n          line = line.replace(/^[-*•]\\s*/, '');\n          if (line) {\n            const rehydrated = rehydrateLinks(line, urlMap);\n            result.actions.push(rehydrated);\n          }\n        }\n      }\n    }\n  }\n\n  // Rehydrate links in summary\n  if (result.summary) {\n    result.summary = rehydrateLinks(result.summary, urlMap);\n  }\n\n  return result;\n}\n}\n\n/**\n * Cleans and normalizes sender name from email\n * @param {string} senderName - Raw sender name from email\n * @returns {string} Cleaned sender name\n */\nfunction cleanFromName(senderName) {\n  if (!senderName) return \"Unknown sender\";\n  \n  let cleaned = String(senderName).trim();\n  \n  // Remove email address in angle brackets\n  if (cleaned.includes(\"<\")) {\n    cleaned = cleaned.split(\"<\")[0].trim();\n  }\n  \n  // Remove domain after pipe\n  if (cleaned.includes(\"|\")) {\n    cleaned = cleaned.split(\"|\")[0].trim();\n  }\n  \n  // Remove surrounding quotes\n  cleaned = cleaned.replace(/^[\\\"']|[\\\"']$/g, \"\");\n  \n  return cleaned || \"Unknown sender\";\n}\n\n/**\n * Formats action items into markdown list with proper link handling\n * @param {Array<string>} actions - Array of action strings\n * @returns {string} Formatted actions block or empty string\n */\nfunction formatActions(actions) {\n  if (!Array.isArray(actions) || actions.length === 0) {\n    return \"\";\n  }\n  \n  const URL_REGEX = /https?:\\/\\/\\S+/;\n  \n  const formattedActions = actions\n    .map((action) => {\n      // Handle \"Label: URL\" format\n      if (action.includes(\":\")) {\n        const parts = action.split(\":\");\n        const label = parts[0].trim();\n        const rest = parts.slice(1).join(\":\").trim();\n        const urlMatch = rest.match(URL_REGEX);\n        \n        if (urlMatch) {\n          return `- [${label}](${urlMatch[0]})`;\n        }\n      }\n      \n      // Handle direct URL in text\n      const urlMatch = action.match(URL_REGEX);\n      if (urlMatch) {\n        return `- [Open link](${urlMatch[0]})`;\n      }\n      \n      // Plain text action\n      return `- ${action}`;\n    })\n    .filter(Boolean);\n  \n  return formattedActions.length > 0\n    ? `\\n\\nActions:\\n${formattedActions.join(\"\\n\")}`\n    : \"\";\n}\n\n/**\n * Creates formatted email message\n * @param {Object} data - Combined email data\n * @returns {string} Formatted message string\n */\nfunction createEmailMessage(data) {\n  const { from, subject, category, receivedDate, summary, actions, gmailUrl } = data;\n  const actionsBlock = formatActions(actions);\n  const formattedDate = new Date(receivedDate).toLocaleString();\n  \n  // Escape user-generated content to prevent markdown parsing errors\n  const escapedFrom = escapeMarkdown(from);\n  const escapedSubject = escapeMarkdown(subject);\n  \n  return `[${escapedFrom}]: ${escapedSubject}\\nCategory: ${category}\\nReceived: ${formattedDate}\\n\\n${summary}${actionsBlock}\\n\\n[Open in Gmail](${gmailUrl})`;\n}\n\n// ---------- main ----------\nconst items = $input.all();\n\n// Early validation\nif (!items || !Array.isArray(items)) {\n  console.error(\"Invalid input: Expected array of items\");\n  return [\n    {\n      json: {\n        message: \"❌ Error: Invalid input data provided to email formatter\",\n        error: true,\n        isSummary: true,\n      },\n    },\n  ];\n}\n\nconst perEmailOutputs = [];\nconst aggregationStats = {\n  total: 0,\n  important: 0,\n  byCategory: new Map(),\n  importantList: [],\n  errors: 0,\n  parsingFailures: 0,\n};\n\nfor (const item of items) {\n  try {\n    // Handle both formats: items with or without .json wrapper\n    const data = item.json || item;\n    \n    console.log(\"Processing item:\", JSON.stringify(data).substring(0, 200));\n    \n    // Get LLM response text\n    const llmResponse = data.response;\n    \n    if (!llmResponse) {\n      console.warn(\"Skipping item with no LLM response. Available keys:\", Object.keys(data));\n      aggregationStats.errors++;\n      continue;\n    }\n    \n    // Parse LLM text response with urlMap for link rehydration\n    const parsedData = parseTextResponse(llmResponse, data.urlMap);\n    \n    if (!parsedData) {\n      console.error(`Failed to parse LLM response. Preview: ${llmResponse.substring(0, 100)}...`);\n      aggregationStats.parsingFailures++;\n      aggregationStats.errors++;\n      continue;\n    }\n    \n    // Get email metadata\n    const from = cleanFromName(data.fromName || \"Unknown sender\");\n    const subject = data.subject || \"No subject\";\n    const gmailUrl = data.gmailUrl || \"#\";\n    const receivedDate = data.internalDate || new Date().toISOString();\n    \n    // Combine LLM analysis with email metadata\n    const combinedData = {\n      isImportant: parsedData.isImportant,\n      category: parsedData.category || \"unknown\",\n      summary: parsedData.summary || \"No summary available\",\n      actions: parsedData.actions || [],\n      from,\n      subject,\n      gmailUrl,\n      receivedDate,\n    };\n    \n    // Update aggregation stats\n    aggregationStats.total++;\n    if (combinedData.isImportant) {\n      aggregationStats.important++;\n      aggregationStats.importantList.push({\n        subject: combinedData.subject,\n        from: combinedData.from,\n      });\n    }\n    \n    // Track categories\n    const currentCount = aggregationStats.byCategory.get(combinedData.category) || 0;\n    aggregationStats.byCategory.set(combinedData.category, currentCount + 1);\n    \n    // Create formatted message\n    const message = createEmailMessage(combinedData);\n    \n    const outputItem = {\n      json: {\n        message,\n        isImportant: combinedData.isImportant,\n        subject: combinedData.subject,\n        from: combinedData.from,\n        category: combinedData.category,\n        receivedDate: combinedData.receivedDate,\n        gmailUrl: combinedData.gmailUrl,\n        summary: combinedData.summary,\n        actions: combinedData.actions,\n        isSummary: false,\n      },\n    };\n    \n    perEmailOutputs.push(outputItem);\n  } catch (error) {\n    console.error(\"Error processing email item:\", error);\n    aggregationStats.errors++;\n  }\n}\n\n/**\n * Creates daily summary message from aggregation stats\n * @param {Object} stats - Aggregation statistics\n * @returns {Object} Summary message object\n */\nfunction createDailySummary(stats) {\n  const finishedAt = new Date().toLocaleString();\n  \n  // Handle no emails case\n  if (stats.total === 0) {\n    return {\n      message: \"📧 Daily Gmail scan complete — no new emails found.\",\n      totalEmails: 0,\n      importantEmails: 0,\n      byCategory: {},\n      errors: stats.errors,\n      parsingFailures: stats.parsingFailures,\n      finishedAt,\n      isSummary: true,\n    };\n  }\n  \n  // Build category breakdown\n  const categoryEntries = Array.from(stats.byCategory.entries())\n    .sort(([, a], [, b]) => b - a)\n    .map(([category, count]) => `• ${category}: ${count}`)\n    .join(\"\\n\");\n  \n  // Build top important emails list (with escaped markdown)\n  const topImportantLines = stats.importantList\n    .slice(0, 5)\n    .map((email) => `- **${escapeMarkdown(email.subject)}** — ${escapeMarkdown(email.from)}`)\n    .join(\"\\n\");\n  \n  // Construct summary message\n  let summaryMessage = `📊 **Daily Gmail Summary**\\n\\n📧 Total emails processed: ${stats.total}\\n🔴 Important emails: ${stats.important}`;\n  \n  if (stats.errors > 0) {\n    summaryMessage += `\\n⚠️ Processing errors: ${stats.errors}`;\n  }\n  \n  if (stats.parsingFailures > 0) {\n    summaryMessage += `\\n⚠️ Parsing failures: ${stats.parsingFailures}`;\n  }\n  \n  if (categoryEntries) {\n    summaryMessage += `\\n\\n**By category:**\\n${categoryEntries}`;\n  }\n  \n  if (topImportantLines) {\n    summaryMessage += `\\n\\n**Top important:**\\n${topImportantLines}`;\n  }\n  \n  summaryMessage += `\\n\\n✅ Individual summaries were sent above.\\n\\n_Scan completed at ${finishedAt}_`;\n  \n  return {\n    message: summaryMessage,\n    totalEmails: stats.total,\n    importantEmails: stats.important,\n    byCategory: Object.fromEntries(stats.byCategory),\n    errors: stats.errors,\n    parsingFailures: stats.parsingFailures,\n    finishedAt,\n    isSummary: true,\n  };\n}\n\n// Create and append daily summary\nconst summary = createDailySummary(aggregationStats);\nconst summaryItem = {\n  json: summary,\n};\nperEmailOutputs.push(summaryItem);\n\nreturn perEmailOutputs;"
+      },
+      "id": "0e04fde7-2d33-48c9-b778-b486d931032b",
+      "name": "Format for Telegram",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        0,
+        0
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "chatId": "={{ 219678893 }}",
+        "text": "=⏳ Processing email...\n📬 From: {{ $json.fromName }} | {{ $json.fromAddress }}\n📝 Subject: {{ $json.subject }}\n🤖 Model: {{ $json.model }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "disable_notification": true
+        }
+      },
+      "id": "177ef603-2966-4d37-bcb3-478a814ad1bd",
+      "name": "Notify Processing Started",
+      "type": "n8n-nodes-base.telegram",
+      "position": [
+        368,
+        192
+      ],
+      "webhookId": "notify-start-webhook",
+      "typeVersion": 1.2,
+      "credentials": {
+        "telegramApi": {
+          "id": "h7RbmzMEg5YYOgNt",
+          "name": "Emails Summary Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://ollama:11434/api/generate",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "model",
+              "value": "={{ $json.model }}"
+            },
+            {
+              "name": "prompt",
+              "value": "=From: {{ $json.fromName }}\nSubject: {{ $json.subject }}\n\n{{ $json.text }}"
+            },
+            {
+              "name": "stream",
+              "value": false
+            },
+            {
+              "name": "system",
+              "value": "Analyze this email and output exactly 4 fields. Do not add any other text.\n\n### Important\nAnswer: Yes or No\n\n### Category\nChoose one: work, personal, finance, shopping, travel, other\n\n### Summary\nWrite 1-2 sentences about this email.\n\n### Actions\nList 2-3 things to do. Format: \"Description: URL\" or just \"Description\"\nWrite \"None\" if no actions.\n\n---\nExample 1 (Notification):\n### Important\nYes\n\n### Category\nfinance\n\n### Summary\nYour invoice #5432 is ready. Payment due November 15th.\n\n### Actions\nView Invoice: https://example.com/inv/5432\nPay Now: https://example.com/pay\nContact Support\n\n---\nExample 2 (Newsletter):\n### Important\nNo\n\n### Category\nshopping\n\n### Summary\nBlack Friday sale announcement. Up to 50% off selected items.\n\n### Actions\nView Sale: https://shop.example.com/sale\nUnsubscribe\n\n---\nExample 3 (Simple update):\n### Important\nNo\n\n### Category\nother\n\n### Summary\nMeal menu changed from dinner to Caesar salad with chicken.\n\n### Actions\nNone\n\n---\nNow analyze the email below:"
+            },
+            {
+              "name": "options",
+              "value": {
+                "temperature": 0.3,
+                "top_p": 0.9,
+                "repeat_penalty": 1.1,
+                "num_threads": 4,
+                "num_ctx": 8192,
+                "num_predict": 500
+              }
+            },
+            {
+              "name": "keep_alive",
+              "value": "2m"
+            },
+            {
+              "name": "stop",
+              "value": [
+                "---",
+                "\n---\n",
+                "---\n"
+              ]
+            }
+          ]
+        },
+        "options": {
+          "timeout": 80000000
+        }
+      },
+      "id": "55c45e71-bf2f-44e5-9167-dbb302b396ce",
+      "name": "Summarise Email with LLM",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        160,
+        400
+      ],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Calculate processing metrics after LLM response\n\n// Get start time from the \"Add Start Timestamp\" node\nconst startTimeMs = $json.startTimeMs;\nconst endTimeMs = Date.now();\nconst durationMs = endTimeMs - startTimeMs;\nconst durationSec = Math.round(durationMs / 1000);\nconst durationMin = (durationSec / 60).toFixed(2);\n\n// Extract LLM metrics from Ollama response\nconst promptTokens = $json.prompt_eval_count || 0;\nconst outputTokens = $json.eval_count || 0;\nconst totalTokens = promptTokens + outputTokens;\n\n// Calculate tokens per second using Ollama's timing data\nconst promptEvalDuration = $json.prompt_eval_duration || 1;\nconst evalDuration = $json.eval_duration || 1;\nconst promptTokensPerSec = (promptTokens / (promptEvalDuration / 1000000000)).toFixed(2);\nconst outputTokensPerSec = (outputTokens / (evalDuration / 1000000000)).toFixed(2);\n\n// Format duration for display\nlet durationDisplay;\nif (durationSec < 60) {\n  durationDisplay = `${durationSec}s`;\n} else if (durationSec < 3600) {\n  durationDisplay = `${durationMin}m`;\n} else {\n  const hours = Math.floor(durationSec / 3600);\n  const mins = Math.floor((durationSec % 3600) / 60);\n  durationDisplay = `${hours}h ${mins}m`;\n}\n\n// Get email metadata from Loop Over Emails node\nconst fromName = $json.fromName;\nconst subject = $json.subject;\n\nreturn {\n  json: {\n    response: $json.response,\n    fromName,\n    subject,\n    durationMs,\n    durationSec,\n    durationMin,\n    durationDisplay,\n    promptTokens,\n    outputTokens,\n    totalTokens,\n    promptTokensPerSec,\n    outputTokensPerSec,\n    // Include original timing data from Ollama (in seconds)\n    totalDurationSec: (($json.total_duration || 0) / 1000000000).toFixed(2),\n    loadDurationSec: (($json.load_duration || 0) / 1000000000).toFixed(2),\n    promptEvalDurationSec: (($json.prompt_eval_duration || 0) / 1000000000).toFixed(2),\n    evalDurationSec: (($json.eval_duration || 0) / 1000000000).toFixed(2),\n    // Preserve email metadata for downstream nodes (including urlMap for link rehydration)\n    urlMap: $json.urlMap || [],\n    gmailUrl: $json.gmailUrl,\n    internalDate: $json.internalDate,\n    fromAddress: $json.fromAddress\n  }\n};"
+      },
+      "id": "685d0f91-189f-4b15-8dc9-511c8b907a74",
+      "name": "Calculate Metrics",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        560,
+        320
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "chatId": "={{ 219678893 }}",
+        "text": "=✅ Completed processing\n📬 From: {{ $json.fromName }}\n📝 Subject: {{ $json.subject }}\n\n⏱️ Total Duration: {{ $json.totalDurationSec }}s (~{{ Math.round($json.totalDurationSec / 60) }}m)\n├─ Load Model: {{ $json.loadDurationSec }}s\n├─ Process Prompt: {{ $json.promptEvalDurationSec }}s\n└─ Generate Response: {{ $json.evalDurationSec }}s\n\n🔢 Tokens: {{ $json.totalTokens }} total\n├─ Prompt: {{ $json.promptTokens }} tokens @ {{ $json.promptTokensPerSec }} tok/s\n└─ Output: {{ $json.outputTokens }} tokens @ {{ $json.outputTokensPerSec }} tok/s",
+        "additionalFields": {
+          "appendAttribution": false,
+          "disable_notification": true
+        }
+      },
+      "id": "4834b51a-08da-4590-8b8e-42fecbbffb8c",
+      "name": "Notify Processing Complete",
+      "type": "n8n-nodes-base.telegram",
+      "position": [
+        736,
+        320
+      ],
+      "webhookId": "notify-complete-webhook",
+      "typeVersion": 1.2,
+      "credentials": {
+        "telegramApi": {
+          "id": "h7RbmzMEg5YYOgNt",
+          "name": "Emails Summary Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "605b2f39-365a-4457-b411-62f38b8e2ef4",
+              "name": "model",
+              "value": "llama3.2:1b",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -192,
+        240
+      ],
+      "id": "c71b3416-23f8-4c2a-bf78-a08647330f41",
+      "name": "Set model",
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "start-timestamp",
+              "name": "startTime",
+              "type": "string",
+              "value": "={{ new Date().toISOString() }}"
+            },
+            {
+              "id": "start-timestamp-ms",
+              "name": "startTimeMs",
+              "type": "number",
+              "value": "={{ Date.now() }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "c2bc3f22-92a0-4a7d-a33a-0e08bb0b3394",
+      "name": "Set Start Timestamp",
+      "type": "n8n-nodes-base.set",
+      "position": [
+        -192,
+        384
+      ],
+      "typeVersion": 3.4
+    },
+    {
+      "parameters": {
+        "chatId": "={{ 219678893 }}",
+        "text": "📧 Daily Gmail scan complete - no new emails found.",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "d53d905f-b2b9-47a3-bf6e-5fb7f0ccc43f",
+      "name": "Notify No Emails",
+      "type": "n8n-nodes-base.telegram",
+      "position": [
+        -784,
+        240
+      ],
+      "webhookId": "ea8088a1-7a12-4dc2-b691-9e3d3d37cab1",
+      "typeVersion": 1.2,
+      "credentials": {
+        "telegramApi": {
+          "id": "h7RbmzMEg5YYOgNt",
+          "name": "Emails Summary Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ 219678893 }}",
+        "text": "={{ $json.message }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "c8986756-0ded-4577-aecd-267258ef6762",
+      "name": "Notify Summary",
+      "type": "n8n-nodes-base.telegram",
+      "position": [
+        368,
+        0
+      ],
+      "webhookId": "bb5d0404-e164-49b9-8f65-2df8d5aa2e10",
+      "typeVersion": 1.2,
+      "credentials": {
+        "telegramApi": {
+          "id": "h7RbmzMEg5YYOgNt",
+          "name": "Emails Summary Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        368,
+        400
+      ],
+      "id": "aee689bc-98ff-4e1d-a2fa-23bf8118f38b",
+      "name": "Merge Model Output"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "numberInputs": 3,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        0,
+        176
+      ],
+      "id": "e7db912c-26cf-4224-9bea-2bc98cafaa83",
+      "name": "Merge Model Input"
+    },
+    {
+      "parameters": {
+        "mode": "chooseBranch",
+        "useDataOfInput": 2
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        912,
+        480
+      ],
+      "id": "997690a7-b071-404d-ace0-c770ddabfe06",
+      "name": "Use Model Output"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get Unread Emails",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Unread Emails": {
+      "main": [
+        [
+          {
+            "node": "Any Emails?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Any Emails?": {
+      "main": [
+        [
+          {
+            "node": "Map Email Fields",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Notify No Emails",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Map Email Fields": {
+      "main": [
+        [
+          {
+            "node": "Clean Email Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clean Email Input": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Emails",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Emails": {
+      "main": [
+        [
+          {
+            "node": "Format for Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Merge Model Input",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Set model",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Set Start Timestamp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format for Telegram": {
+      "main": [
+        [
+          {
+            "node": "Notify Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Summarise Email with LLM": {
+      "main": [
+        [
+          {
+            "node": "Merge Model Output",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Calculate Metrics": {
+      "main": [
+        [
+          {
+            "node": "Notify Processing Complete",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify Processing Complete": {
+      "main": [
+        [
+          {
+            "node": "Use Model Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set model": {
+      "main": [
+        [
+          {
+            "node": "Merge Model Input",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Set Start Timestamp": {
+      "main": [
+        [
+          {
+            "node": "Merge Model Input",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Merge Model Input": {
+      "main": [
+        [
+          {
+            "node": "Summarise Email with LLM",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Notify Processing Started",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge Model Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Model Output": {
+      "main": [
+        [
+          {
+            "node": "Calculate Metrics",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Use Model Output",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Use Model Output": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Emails",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "7ff9a420-8f2c-460b-9547-3febd84cf5fc",
+  "meta": {
+    "instanceId": "f6850b7a742915e4beea1da1d7e81ab301286f32549db44a9ced290422cc1c31"
+  },
+  "id": "nVTsFkl8bm0p6cHy",
+  "tags": [
+    {
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z",
+      "id": "gmail-automation",
+      "name": "Gmail Automation"
+    }
+  ]
+}
