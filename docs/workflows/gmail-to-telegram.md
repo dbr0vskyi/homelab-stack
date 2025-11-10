@@ -41,18 +41,22 @@ The workflow includes comprehensive email sanitization to improve LLM processing
 - **Smart Truncation**: Limits to 10,000 chars at sentence boundaries
 - **Token Reduction**: 70-80% reduction in token count
 
+**Status**: Fully implemented and battle-tested (100% success rate in recent investigations)
+
 **See**: `docs/email-sanitization.md` for complete implementation details
 
 ### LLM Configuration
 
-- **Model**: `qwen2.5:7b` (recommended) or `llama3.1:8b`
+- **Model**: `qwen2.5:7b` (currently configured, but oversized for this task)
+- **Recommended Models**: `qwen2.5:1.5b` or `llama3.2:3b` for 5-21x performance improvement
 - **Context Window**: 8,192 tokens (optimized for email processing)
 - **Timeout**: 12 hours workflow timeout, extended HTTP timeouts for long-running inference
-- **Structured Output**: JSON schema validation for consistent results
+- **Output Format**: Structured text format (avoids JSON parsing errors)
 
 ### Output Format
 
 Each email is summarized with:
+
 - **Subject**: Original email subject
 - **From**: Sender name and email
 - **Importance**: Boolean flag for priority emails
@@ -67,11 +71,13 @@ Each email is summarized with:
 Configure these in the n8n UI after importing:
 
 1. **Gmail OAuth2**
+
    - Client ID
    - Client Secret
    - Refresh Token
 
 2. **Telegram Bot**
+
    - Bot Token (from @BotFather)
    - Chat ID
 
@@ -88,22 +94,45 @@ Edit the "Schedule Trigger" node to change the execution time:
 
 ### Model Selection
 
-Edit the "Summarize Email with LLM" node to change the model:
+Edit the "Set model" node to change the model:
 
 ```json
 {
-  "model": "qwen2.5:7b",  // Change this
-  "options": {
-    "num_ctx": 8192
-  }
+  "model": "qwen2.5:7b" // Default: 7.44 min/email
+  // Recommended alternatives:
+  // "qwen2.5:1.5b"      // ~0.35 min/email (21x faster)
+  // "llama3.2:3b"       // ~1.27 min/email (5.9x faster)
 }
 ```
+
+**Model Comparison** (based on Investigation 286):
+
+| Model        | Performance    | Memory | Quality   | Recommendation                        |
+| ------------ | -------------- | ------ | --------- | ------------------------------------- |
+| qwen2.5:1.5b | 0.35 min/email | ~8GB   | Excellent | ⭐ **Best Choice** - Fast & efficient |
+| llama3.2:3b  | 1.27 min/email | ~10GB  | Excellent | Good balance                          |
+| qwen2.5:7b   | 7.44 min/email | ~12GB  | Excellent | Oversized for this task               |
+
+**Key Insights:**
+
+- Email summarization is a simple NLP task that doesn't require large models
+- Smaller models (1.5-3B params) produce equivalent quality output 5-21x faster
+- Context window is adequate across all models (8K tokens configured)
+- Current default (qwen2.5:7b) wastes resources and increases execution time
+
+**How to Change:**
+
+1. Open workflow in n8n
+2. Find "Set model" node (in the email processing loop)
+3. Change the value from `qwen2.5:7b` to `qwen2.5:1.5b`
+4. Save and test with a manual execution
 
 ## Troubleshooting
 
 ### Issue: No emails being processed
 
 **Check**:
+
 1. Gmail credentials are valid and authorized
 2. Unread emails exist in inbox
 3. Check n8n execution logs: `./scripts/manage.sh logs n8n`
@@ -111,28 +140,60 @@ Edit the "Summarize Email with LLM" node to change the model:
 ### Issue: LLM timeouts
 
 **Solutions**:
+
 1. Verify Ollama is running: `docker compose ps ollama`
-2. Check Ollama has sufficient memory (12GB+ recommended)
-3. Try a smaller model: `llama3.2:3b`
+2. Check Ollama has sufficient memory (8-12GB recommended for qwen2.5:1.5b/3b)
+3. Switch to a smaller, faster model: `qwen2.5:1.5b` (21x faster than 7b)
 4. Check timeout patch is loaded in n8n logs
+
+**Note**: With proper email sanitization and smaller models, timeouts should be extremely rare.
 
 ### Issue: Parsing failures (non-JSON responses)
 
-**Causes**:
-- Oversized emails overwhelming context window
-- Promotional emails confusing the LLM
-- Non-English emails triggering wrong language output
+**Historical Context** (Oct 2025, Investigation 191):
 
-**Solutions**:
+- 25% parsing failures with llama3.2:3b before sanitization
+- Promotional emails and non-English content confused the LLM
+
+**Current Status** (Nov 2025):
+
+- ✅ **RESOLVED** with comprehensive email sanitization
+- 100% success rate with proper sanitization and text format output
+- Workflow now uses structured text format instead of JSON to avoid parsing issues
+
+**If issues occur**:
+
 1. Verify "Clean Email Input" node is connected and active
 2. Check sanitization statistics in execution logs
 3. Review email-sanitization.md for tuning options
+
+### Issue: Telegram markdown parsing failure
+
+**Cause**: Malformed markdown in email subjects or sender names (Investigation 283)
+
+**Symptoms**:
+
+- Error: `Can't parse entities: Can't find end of the entity starting at byte offset X`
+- Workflow succeeds but final summary message fails to send
+
+**Solution**:
+
+1. Check "Format for Telegram" node for unescaped markdown characters
+2. Email subjects containing `*`, `_`, `[`, `]` need proper escaping
+3. Ensure the node escapes user-generated content before markdown formatting
+
+**Workaround**:
+
+- Individual per-email notifications succeed (properly escaped)
+- Only the final aggregated summary message may fail
+- Check Telegram for partial results in per-email notifications
 
 ### Issue: Garbled characters in summaries
 
 **Cause**: HTML entity encoding issues
 
 **Solution**:
+
 - Verify Phase 1 improvements are applied (v1.1)
 - Check `cleanHTML()` function has comprehensive entity list
 - See `docs/email-sanitization-improvements.md`
@@ -182,21 +243,31 @@ For comprehensive analysis of issues:
 
 ## Performance Metrics
 
-**Expected Performance** (with v1.1 sanitization):
+**Expected Performance** (based on recent investigations):
 
-| Metric | Target | Notes |
-|--------|--------|-------|
-| Processing time | 4-6 min/email | Depends on email size and model |
-| Token count | ~1,000-1,500 | After sanitization (70-80% reduction) |
-| Schema compliance | 100% | All responses should be valid JSON |
-| Memory usage | ~12GB | Per LLM call with 8K context |
-| Parsing failures | 0% | Down from 25% pre-sanitization |
+| Model             | Time/Email | Token Count  | Schema Compliance | Memory Usage | Notes                           |
+| ----------------- | ---------- | ------------ | ----------------- | ------------ | ------------------------------- |
+| qwen2.5:1.5b      | ~0.35 min  | ~1,000-1,500 | 100%              | ~8GB         | **Recommended** - 21x faster    |
+| llama3.2:3b       | ~1.27 min  | ~1,000-1,500 | 100%              | ~10GB        | Good balance                    |
+| qwen2.5:7b        | ~7.44 min  | ~1,000-1,500 | 100%              | ~12GB        | Currently configured, oversized |
+| llama3.2:3b (old) | ~4-6 min   | ~2,500-4,000 | 75%               | ~12GB        | Before sanitization (Oct 2025)  |
+
+**Historical Context:**
+
+- **Investigation 191 (Oct 29, 2025)**: 25% parsing failures with llama3.2:3b due to lack of email sanitization
+- **Investigation 286 (Nov 10, 2025)**: 100% success rate with qwen2.5:7b after sanitization improvements
+- **Token reduction**: 70-80% reduction achieved through comprehensive sanitization
 
 ## Related Documentation
 
 - **Email Sanitization**: `docs/email-sanitization.md`
 - **Improvements Roadmap**: `docs/email-sanitization-improvements.md`
-- **Investigation Reports**: `docs/investigations/2025-10-29-workflow-191-llm-parsing-failures.md`
+- **Investigation Reports**:
+  - `docs/investigations/2025-10-29-workflow-191-llm-parsing-failures.md` (Historical: Pre-sanitization issues)
+  - `docs/investigations/2025-11-02-workflow-200-performance-and-schema-compliance.md` (Performance analysis)
+  - `docs/investigations/2025-11-08-workflow-278-performance-degradation.md` (Anomalous slowdown)
+  - `docs/investigations/2025-11-09-workflow-283-telegram-markdown-parsing-failure.md` (Telegram formatting issue)
+  - `docs/investigations/2025-11-10-workflow-286-performance-baseline.md` (Current baseline with qwen2.5:7b)
 - **Model Analysis**: `docs/model-context-window-analysis.md`
 - **Investigation System**: `docs/investigation-system.md`
 
@@ -217,6 +288,7 @@ For comprehensive analysis of issues:
 ### Update Sanitization
 
 When modifying the "Clean Email Input" node:
+
 1. Test with sample emails first
 2. Export workflow after changes
 3. Monitor first production run closely
@@ -224,6 +296,6 @@ When modifying the "Clean Email Input" node:
 
 ---
 
-**Last Updated**: 2025-11-09
-**Version**: 1.1 (includes Phase 1 sanitization improvements)
+**Last Updated**: 2025-11-10
+**Version**: 1.2 (Updated with findings from investigations 191, 200, 278, 283, 286)
 **Status**: Production
