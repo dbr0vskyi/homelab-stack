@@ -22,7 +22,7 @@ Schedule Trigger (2am daily)
   → Clean Email Input (Sanitization)
   → Loop Over Emails
     → Summarize Email with LLM (Ollama)
-    → Extract JSON Response
+    → Parse Structured Text Response
     → Format for Telegram
   → Send Daily Summary (Telegram)
   → Mark Emails as Read (Gmail)
@@ -47,8 +47,8 @@ The workflow includes comprehensive email sanitization to improve LLM processing
 
 ### LLM Configuration
 
-- **Model**: `qwen2.5:7b` (currently configured, but oversized for this task)
-- **Recommended Models**: `qwen2.5:1.5b` or `llama3.2:3b` for 5-21x performance improvement
+- **Model**: `llama3.2:3b` (currently configured in workflow)
+- **Recommended Models**: `qwen2.5:1.5b` (best choice), `llama3.2:3b` (good balance)
 - **Context Window**: 8,192 tokens (optimized for email processing)
 - **Timeout**: 12 hours workflow timeout, extended HTTP timeouts for long-running inference
 - **Output Format**: Structured text format (avoids JSON parsing errors)
@@ -98,10 +98,9 @@ Edit the "Set model" node to change the model:
 
 ```json
 {
-  "model": "qwen2.5:7b" // Default: 7.44 min/email
-  // Recommended alternatives:
+  "model": "llama3.2:3b" // Default in workflow (1.27 min/email)
+  // Recommended alternative:
   // "qwen2.5:1.5b"      // ~0.35 min/email (21x faster)
-  // "llama3.2:3b"       // ~1.27 min/email (5.9x faster)
 }
 ```
 
@@ -110,7 +109,7 @@ Edit the "Set model" node to change the model:
 | Model        | Performance    | Memory | Quality   | Recommendation                        |
 | ------------ | -------------- | ------ | --------- | ------------------------------------- |
 | qwen2.5:1.5b | 0.35 min/email | ~8GB   | Excellent | ⭐ **Best Choice** - Fast & efficient |
-| llama3.2:3b  | 1.27 min/email | ~10GB  | Excellent | Good balance                          |
+| llama3.2:3b  | 1.27 min/email | ~10GB  | Excellent | **Configured in workflow**            |
 | qwen2.5:7b   | 7.44 min/email | ~12GB  | Excellent | Oversized for this task               |
 
 **Key Insights:**
@@ -118,13 +117,13 @@ Edit the "Set model" node to change the model:
 - Email summarization is a simple NLP task that doesn't require large models
 - Smaller models (1.5-3B params) produce equivalent quality output 5-21x faster
 - Context window is adequate across all models (8K tokens configured)
-- Current default (qwen2.5:7b) wastes resources and increases execution time
+- Current workflow uses `llama3.2:3b` (good balance); `qwen2.5:1.5b` is recommended for best performance
 
 **How to Change:**
 
 1. Open workflow in n8n
 2. Find "Set model" node (in the email processing loop)
-3. Change the value from `qwen2.5:7b` to `qwen2.5:1.5b`
+3. Change the value from `llama3.2:3b` to `qwen2.5:1.5b` for faster execution
 4. Save and test with a manual execution
 
 ## Troubleshooting
@@ -260,9 +259,9 @@ For comprehensive analysis of issues:
 
 **Known Issues (Under Improvement):**
 
-- ⚠️ **High importance rate**: Current prompts classify ~75% of emails as "important", which reduces filtering effectiveness
+- ⚠️ **High importance rate**: Current workflow and prompt classify ~75% of emails as "important", which reduces filtering effectiveness
 - ⚠️ **Category misclassification**: Some emails are categorized incorrectly (e.g., promotional emails marked as personal)
-- 🔄 **Status**: Prompts will be gradually adjusted and tested to improve classification accuracy in future updates
+- 🔄 **Status**: These issues are present in the workflow and will be gradually adjusted and tested to improve classification accuracy in future updates
 
 ## Related Documentation
 
